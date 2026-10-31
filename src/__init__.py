@@ -1,0 +1,2 @@
+"""Lightning strike detection package."""
+

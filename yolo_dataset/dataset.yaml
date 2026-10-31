@@ -1,0 +1,7 @@
+path: C:/Users/joeyw/GitProjects/Video-Lighnting-Detection/yolo_dataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: lightning
