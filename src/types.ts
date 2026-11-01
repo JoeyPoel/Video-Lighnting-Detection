@@ -9,6 +9,8 @@ export interface StrikeDetection {
   confidence: number;
   /** Frame index in the video */
   frameIndex: number;
+  /** Optional bounding box [x1, y1, x2, y2] normalized [0, 1] from YOLO */
+  bbox?: [number, number, number, number];
 }
 
 export interface StrikeInterval {

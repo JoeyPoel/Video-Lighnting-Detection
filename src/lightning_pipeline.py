@@ -400,8 +400,8 @@ def detect_lightning_in_video(
                 )
                 brightness_delta = mean_brightness - rolling_baseline
 
-                # Sensitive temporal luminance surge (catches subtle sky & distant flashes)
-                has_flash_burst = brightness_delta > 5.0 or (mean_brightness > rolling_baseline * 1.15)
+                # Sudden positive temporal luminance surge (flash burst verification)
+                has_flash_burst = brightness_delta > 12.0 or (mean_brightness > rolling_baseline * 1.30)
 
                 # Run YOLO prediction
                 results = yolo_model(frame, conf=conf_threshold, verbose=False)
@@ -447,8 +447,8 @@ def detect_lightning_in_video(
 
                         if not is_static_light:
                             # Genuine strike requires either a temporal flash burst (which real lightning produces)
-                            # or high model confidence (conf >= 0.55) to suppress stationary fixtures on initial frames
-                            if has_flash_burst or conf >= 0.55:
+                            # or strong model confidence (conf >= 0.60) to suppress stationary fixtures on initial frames
+                            if has_flash_burst or conf >= 0.60:
                                 has_verified_strike = True
 
                     active_tracks = [t for t in updated_tracks if frame_idx - t['last_frame'] <= 3]

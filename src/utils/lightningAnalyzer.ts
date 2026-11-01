@@ -1,5 +1,6 @@
 import type { StrikeDetection, StrikeInterval, VideoMetadata } from '../types.ts';
 import { calculateStrikeIntervals } from './intervalMerger.ts';
+import { runYoloDetectionOnFrame } from './yoloDetector.ts';
 
 export interface AnalysisProgress {
   currentFrame: number;
@@ -200,17 +201,21 @@ export class LightningTemporalDetector {
   }
 }
 
+export interface AnalysisOptions {
+  sensitivity?: number;
+  bufferSeconds?: number;
+  sampleFps?: number;
+  useYolo?: boolean;
+  yoloConfidence?: number;
+}
+
 /**
- * Ultra-Fast Hardware-Accelerated Video Lightning Analyzer.
+ * Ultra-Fast Hardware-Accelerated Video Lightning Analyzer with Optional YOLO11 Neural Verification.
  * Features 25 FPS precision sampling with quadrant detection and stable progress reporting.
  */
 export const analyzeVideoForLightning = async (
   sourceVideo: HTMLVideoElement,
-  options: {
-    sensitivity?: number;
-    bufferSeconds?: number;
-    sampleFps?: number;
-  } = {},
+  options: AnalysisOptions = {},
   onProgress?: (
     progress: AnalysisProgress,
     liveDetections?: StrikeDetection[]
@@ -244,6 +249,8 @@ export const analyzeVideoForLightning = async (
   const sensitivity = options.sensitivity ?? 0.5;
   const bufferSeconds = options.bufferSeconds ?? 2.0; // Default 2.0s buffer
   const sampleFps = options.sampleFps ?? 25; // 25 FPS high temporal precision
+  const useYolo = options.useYolo ?? true; // Enable in-browser YOLO neural engine by default
+  const yoloConfidence = options.yoloConfidence ?? 0.20;
 
   const width = sourceVideo.videoWidth || 640;
   const height = sourceVideo.videoHeight || 360;
@@ -351,12 +358,30 @@ export const analyzeVideoForLightning = async (
       const { isStrike, confidence } = detector.processFrame(stats);
 
       if (isStrike) {
+        let finalConfidence = confidence;
+        let bbox: [number, number, number, number] | undefined = undefined;
+
+        if (useYolo) {
+          try {
+            const yoloResult = await runYoloDetectionOnFrame(workerVideo, yoloConfidence);
+            if (yoloResult.boxes.length > 0) {
+              const bestBox = yoloResult.boxes[0];
+              bbox = [bestBox.x1, bestBox.y1, bestBox.x2, bestBox.y2];
+              finalConfidence = Math.max(confidence, bestBox.confidence);
+            }
+          } catch (yoloErr) {
+            // Graceful fallback to pure temporal stats if ONNX loading/WebGL is unavailable
+            console.debug('YOLO inference skipped:', yoloErr);
+          }
+        }
+
         const lastDet = detections[detections.length - 1];
         if (!lastDet || t - lastDet.timestamp >= 0.06) {
           detections.push({
             timestamp: Math.round(t * 100) / 100,
-            confidence: Math.round(confidence * 100) / 100,
+            confidence: Math.round(finalConfidence * 100) / 100,
             frameIndex: step,
+            bbox,
           });
         }
       }

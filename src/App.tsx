@@ -40,6 +40,7 @@ export const App: React.FC = () => {
   // Detection Settings (default buffer strictly 2.0 seconds)
   const [bufferSeconds, setBufferSeconds] = useState<number>(2.0);
   const [sensitivity, setSensitivity] = useState<number>(0.55);
+  const [useYolo, setUseYolo] = useState<boolean>(true);
 
   // Operation State
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -74,6 +75,8 @@ export const App: React.FC = () => {
           sensitivity,
           bufferSeconds,
           sampleFps: 25,
+          useYolo,
+          yoloConfidence: 0.20,
         },
         (prog, liveDets) => {
           setAnalysisProgress(prog);
@@ -203,6 +206,10 @@ export const App: React.FC = () => {
       setMontageProgress(null);
     }
   };
+
+  const activeStrike = detections.find(
+    (d) => Math.abs(d.timestamp - currentTime) < 0.25 && d.bbox
+  );
 
   return (
     <div className="relative min-h-screen text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white bg-transparent">
@@ -347,6 +354,23 @@ export const App: React.FC = () => {
                     playsInline
                   />
 
+                  {/* Real-time YOLO Neural Bounding Box Overlay */}
+                  {activeStrike && activeStrike.bbox && (
+                    <div
+                      style={{
+                        left: `${activeStrike.bbox[0] * 100}%`,
+                        top: `${activeStrike.bbox[1] * 100}%`,
+                        width: `${Math.max(4, (activeStrike.bbox[2] - activeStrike.bbox[0]) * 100)}%`,
+                        height: `${Math.max(4, (activeStrike.bbox[3] - activeStrike.bbox[1]) * 100)}%`,
+                      }}
+                      className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/10 pointer-events-none rounded shadow-[0_0_15px_#e879f9] transition-all duration-75 animate-pulse"
+                    >
+                      <span className="absolute -top-5 left-0 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-[#140b2b] text-fuchsia-300 border border-fuchsia-400/50 rounded shadow whitespace-nowrap">
+                        ⚡ YOLO {(activeStrike.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  )}
+
                   {/* Player Overlay Controls */}
                   <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -440,6 +464,32 @@ export const App: React.FC = () => {
                       onChange={(e) => setSensitivity(parseFloat(e.target.value))}
                       className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
                     />
+                  </div>
+
+                  {/* YOLO11 Neural ONNX Engine Toggle */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#140b2b]/90 border border-purple-500/30 shadow-inner">
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      <div>
+                        <span className="text-xs font-mono font-bold text-white block">
+                          YOLO11 NEURAL ENGINE
+                        </span>
+                        <span className="text-[10px] text-purple-300/70 font-mono">
+                          Client-side ONNX WebGL
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUseYolo((prev) => !prev)}
+                      className={`px-3 py-1 rounded-full font-mono text-[10px] uppercase font-bold border transition ${
+                        useYolo
+                          ? 'bg-purple-600 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+                          : 'bg-black/60 border-purple-900/50 text-slate-400'
+                      }`}
+                    >
+                      {useYolo ? 'ACTIVE' : 'OFF'}
+                    </button>
                   </div>
                 </div>
 
