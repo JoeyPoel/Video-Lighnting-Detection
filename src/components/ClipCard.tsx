@@ -54,15 +54,17 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, index }) => {
               <Clock className="w-3.5 h-3.5 text-purple-400/70" />
               <span>Duration:</span>
             </span>
-            <span className="text-white font-mono">{clip.interval.duration.toFixed(2)}s (±1.0s buffer)</span>
+            <span className="text-white font-mono">{clip.interval.duration.toFixed(2)}s</span>
           </div>
 
           <div className="flex items-center justify-between text-slate-300 text-[11px]">
             <span className="flex items-center gap-1.5">
               <HardDrive className="w-3.5 h-3.5 text-purple-400/70" />
-              <span>File size:</span>
+              <span>Format & Size:</span>
             </span>
-            <span className="text-white font-mono">{formatSize(clip.sizeBytes)}</span>
+            <span className="text-white font-mono">
+              {clip.filename.split('.').pop()?.toUpperCase()} • {formatSize(clip.sizeBytes)}
+            </span>
           </div>
         </div>
 

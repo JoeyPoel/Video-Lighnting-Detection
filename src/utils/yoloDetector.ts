@@ -1,7 +1,12 @@
 import * as ort from 'onnxruntime-web';
 
-// Point ONNX runtime WebAssembly binaries to the local public directory
-ort.env.wasm.wasmPaths = '/';
+// Base URL for resolving assets on GitHub Pages or local development
+const BASE_URL = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+// Point ONNX runtime WebAssembly binaries to the base directory
+ort.env.wasm.wasmPaths = BASE_URL;
 ort.env.wasm.numThreads = 1;
 
 export interface BoundingBox {
@@ -29,7 +34,7 @@ let isLoadingSession = false;
  * @returns InferenceSession ready for execution.
  */
 export const getYoloSession = async (
-  modelPath: string = '/models/lightning_yolo.onnx'
+  modelPath: string = `${BASE_URL}models/lightning_yolo.onnx`
 ): Promise<ort.InferenceSession> => {
   if (sessionInstance) {
     return sessionInstance;

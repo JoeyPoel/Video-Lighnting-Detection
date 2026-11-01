@@ -2,15 +2,21 @@ import type { ExtractedClip, StrikeInterval } from '../types.ts';
 
 /**
  * Returns the best supported video MIME type and file extension for MediaRecorder.
- * Prioritizes standard MP4 (AVC1 / H.264) to ensure native playback in Windows Media Player
- * without 0x8000FFFF codec errors, falling back to WebM if MP4 recording is unavailable.
+ * Prioritizes standard MP4 (AVC1 / H.264 Baseline + AAC) to ensure native playback in
+ * Windows Media Player without 0x8000FFFF codec errors, falling back to WebM if unavailable.
  */
 export const getSupportedVideoMimeType = (): { mimeType: string; extension: string } => {
   const candidates = [
-    'video/mp4;codecs=avc1',
+    'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs="avc1,mp4a.40.2"',
+    'video/mp4;codecs=avc1,mp4a.40.2',
     'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=avc1',
     'video/mp4',
+    'video/webm;codecs=h264,opus',
     'video/webm;codecs=h264',
+    'video/webm;codecs=vp8,opus',
     'video/webm;codecs=vp8',
     'video/webm',
     'video/webm;codecs=vp9',
@@ -24,6 +30,64 @@ export const getSupportedVideoMimeType = (): { mimeType: string; extension: stri
   }
 
   return { mimeType: 'video/webm', extension: 'webm' };
+};
+
+/**
+ * Creates or extracts a valid audio track for the recording stream.
+ * Windows Media Player (error 0x8000FFFF) requires a valid audio stream in MP4 containers.
+ * If the source video doesn't provide an audio stream, a silent audio track is synthesized.
+ */
+const getAudioTrackForStream = (
+  video: HTMLVideoElement
+): { track: MediaStreamTrack | null; cleanup: () => void } => {
+  try {
+    const videoWithCapture = video as HTMLVideoElement & {
+      captureStream?: () => MediaStream;
+      mozCaptureStream?: () => MediaStream;
+    };
+    const captureFn = videoWithCapture.captureStream || videoWithCapture.mozCaptureStream;
+    if (captureFn) {
+      const captured = captureFn.call(videoWithCapture);
+      const audioTracks = captured.getAudioTracks();
+      if (audioTracks.length > 0 && audioTracks[0].readyState === 'live') {
+        return { track: audioTracks[0], cleanup: () => {} };
+      }
+    }
+  } catch {
+    // Cross-origin or unsupported captureStream, fallback to synthesis
+  }
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0; // completely silent
+      const dst = ctx.createMediaStreamDestination();
+      osc.connect(gain);
+      gain.connect(dst);
+      osc.start();
+      const track = dst.stream.getAudioTracks()[0];
+      return {
+        track: track || null,
+        cleanup: () => {
+          try {
+            osc.stop();
+            ctx.close().catch(() => {});
+          } catch {
+            // ignore
+          }
+        },
+      };
+    }
+  } catch {
+    // AudioContext blocked or unsupported
+  }
+
+  return { track: null, cleanup: () => {} };
 };
 
 /**
@@ -68,6 +132,15 @@ export const sliceVideoInterval = async (
   const { mimeType: selectedMime, extension } = getSupportedVideoMimeType();
 
   const stream = canvas.captureStream(30);
+  const audioInfo = getAudioTrackForStream(video);
+  if (audioInfo.track) {
+    try {
+      stream.addTrack(audioInfo.track);
+    } catch {
+      // ignore
+    }
+  }
+
   const recorder = new MediaRecorder(stream, {
     mimeType: selectedMime,
     videoBitsPerSecond: 4_000_000,
@@ -84,6 +157,7 @@ export const sliceVideoInterval = async (
 
   return new Promise<ExtractedClip>((resolve, reject) => {
     recorder.onstop = () => {
+      audioInfo.cleanup();
       const blob = new Blob(recordedChunks, { type: selectedMime });
       const blobUrl = URL.createObjectURL(blob);
       resolve({
@@ -96,12 +170,17 @@ export const sliceVideoInterval = async (
     };
 
     recorder.onerror = (e) => {
+      audioInfo.cleanup();
       reject(e);
     };
 
     seekTo(video, interval.start)
       .then(() => {
-        recorder.start(100);
+        // Draw initial frame immediately so stream is active
+        ctx.drawImage(video, 0, 0, width, height);
+
+        // Record continuous stream without micro-fragmentation
+        recorder.start();
 
         const startTime = interval.start;
         const endTime = interval.end;
@@ -198,6 +277,15 @@ export const createLightningMontage = async (
   const { mimeType: selectedMime, extension } = getSupportedVideoMimeType();
 
   const stream = canvas.captureStream(30);
+  const audioInfo = getAudioTrackForStream(video);
+  if (audioInfo.track) {
+    try {
+      stream.addTrack(audioInfo.track);
+    } catch {
+      // ignore
+    }
+  }
+
   const recorder = new MediaRecorder(stream, {
     mimeType: selectedMime,
     videoBitsPerSecond: 4_500_000,
@@ -214,6 +302,7 @@ export const createLightningMontage = async (
 
   return new Promise<ExtractedClip>((resolve, reject) => {
     recorder.onstop = () => {
+      audioInfo.cleanup();
       const blob = new Blob(recordedChunks, { type: selectedMime });
       const blobUrl = URL.createObjectURL(blob);
       resolve({
@@ -232,14 +321,12 @@ export const createLightningMontage = async (
     };
 
     recorder.onerror = (e) => {
+      audioInfo.cleanup();
       reject(e);
     };
 
     const originalMuted = video.muted;
     video.muted = true;
-
-    // Start recording immediately
-    recorder.start(100);
 
     let currentIntervalIdx = 0;
     let accumulatedRecordedSeconds = 0;
@@ -258,6 +345,15 @@ export const createLightningMontage = async (
 
       try {
         await seekTo(video, inv.start);
+
+        // Render first frame immediately
+        ctx.drawImage(video, 0, 0, width, height);
+
+        // If recording hasn't started yet, begin continuous stream without micro-fragmentation
+        if (recorder.state === 'inactive') {
+          recorder.start();
+        }
+
         await video.play();
 
         let animId: number;
