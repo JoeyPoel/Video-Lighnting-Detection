@@ -1,18 +1,21 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Film, Sparkles, Loader2 } from 'lucide-react';
-import { generateSampleStormVideo } from '../utils/syntheticVideo.ts';
+import { UploadCloud, Film } from 'lucide-react';
+import { GlowButton } from './common/GlowButton';
 
 interface VideoUploaderProps {
   onVideoSelected: (fileOrBlob: Blob, name: string) => void;
   disabled?: boolean;
 }
 
+/**
+ * Ultra-Clean Minimalist Video Uploader
+ * Single-action video dropzone with frosted glass blur and elegant typography.
+ */
 export const VideoUploader: React.FC<VideoUploaderProps> = ({
   onVideoSelected,
   disabled = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,20 +35,8 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
     }
   };
 
-  const handleLoadDemo = async () => {
-    try {
-      setIsGeneratingDemo(true);
-      const demoBlob = await generateSampleStormVideo(9.0, 30);
-      onVideoSelected(demoBlob, 'sample_storm_thunder.webm');
-    } catch (err) {
-      console.error('Failed to generate sample video:', err);
-    } finally {
-      setIsGeneratingDemo(false);
-    }
-  };
-
   return (
-    <div className="w-full">
+    <div className="w-full max-w-2xl mx-auto">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -53,10 +44,10 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
-        className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+        className={`relative p-8 sm:p-12 text-center transition-all duration-500 backdrop-blur-2xl rounded-3xl bg-[#0c071a]/35 border ${
           isDragOver
-            ? 'border-cyan-400 bg-cyan-950/20 shadow-lg shadow-cyan-500/10'
-            : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
+            ? 'border-purple-400 shadow-[0_0_50px_rgba(168,85,247,0.35)] bg-[#1a1033]/50 scale-[1.01]'
+            : 'border-purple-500/20 hover:border-purple-400/40 shadow-[0_20px_50px_rgba(0,0,0,0.6)]'
         }`}
       >
         <input
@@ -68,44 +59,34 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
           disabled={disabled}
         />
 
-        <div className="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700 mx-auto flex items-center justify-center mb-4">
-          <UploadCloud className="w-8 h-8 text-cyan-400" />
+        {/* Minimal Pedestal */}
+        <div className="w-14 h-14 rounded-2xl bg-[#140b2b]/80 border border-purple-500/30 mx-auto flex items-center justify-center mb-5 shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+          <UploadCloud className="w-6 h-6 text-purple-300" />
         </div>
 
-        <h3 className="text-base font-semibold text-white mb-1">
-          Upload video containing lightning strikes
-        </h3>
-        <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-          MP4, WebM, MOV, or AVI. Analysis detects flash points and slices each event with a 1-second lead-in and 1-second tail buffer.
-        </p>
+        <div className="space-y-2 mb-8">
+          <h3 className="font-editorial italic text-3xl sm:text-4xl text-white tracking-tight">
+            Drop Storm Footage
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-300/80 max-w-md mx-auto leading-relaxed">
+            Automated strike isolation with ±1.0s buffered clip extraction.
+          </p>
+        </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
+        {/* Focused Single Action Button */}
+        <div className="flex items-center justify-center">
+          <GlowButton
+            variant="primary"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs tracking-wide transition shadow-lg shadow-cyan-500/25 flex items-center space-x-2 disabled:opacity-50"
           >
-            <Film className="w-4 h-4" />
-            <span>Choose Video File</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleLoadDemo}
-            disabled={disabled || isGeneratingDemo}
-            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 font-medium text-xs tracking-wide transition flex items-center space-x-2 disabled:opacity-50"
-          >
-            {isGeneratingDemo ? (
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-            ) : (
-              <Sparkles className="w-4 h-4 text-amber-400" />
-            )}
-            <span>{isGeneratingDemo ? 'Synthesizing Storm...' : 'Load Sample Storm Video'}</span>
-          </button>
+            <Film className="w-4 h-4 mr-1.5" />
+            SELECT VIDEO
+          </GlowButton>
         </div>
       </div>
     </div>
   );
 };
 
+export default VideoUploader;

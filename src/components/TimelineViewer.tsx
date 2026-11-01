@@ -1,5 +1,6 @@
 import React from 'react';
 import type { StrikeDetection, StrikeInterval } from '../types.ts';
+import { Zap, Clock } from 'lucide-react';
 
 interface TimelineViewerProps {
   duration: number;
@@ -9,6 +10,11 @@ interface TimelineViewerProps {
   onSeek: (seconds: number) => void;
 }
 
+/**
+ * TimelineViewer Component
+ * Visualizes frame-accurate strike spikes and buffered extraction intervals.
+ * Styled with electric purple plasma accents.
+ */
 export const TimelineViewer: React.FC<TimelineViewerProps> = ({
   duration,
   currentTime,
@@ -18,8 +24,6 @@ export const TimelineViewer: React.FC<TimelineViewerProps> = ({
 }) => {
   if (duration <= 0) return null;
 
-  const currentPercent = Math.min(100, Math.max(0, (currentTime / duration) * 100));
-
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -28,25 +32,31 @@ export const TimelineViewer: React.FC<TimelineViewerProps> = ({
   };
 
   return (
-    <div className="w-full bg-slate-900/70 border border-slate-800 rounded-2xl p-4">
-      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-        <div className="flex items-center space-x-2">
-          <span className="font-semibold text-slate-300">Strike Timeline</span>
-          <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-            {intervals.length} event{intervals.length === 1 ? '' : 's'} buffered
+    <div className="w-full bg-[#0c071a]/50 border border-purple-500/25 rounded-2xl p-4 sm:p-5 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+      <div className="flex items-center justify-between text-xs text-slate-300 mb-3">
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-white flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider">
+            <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400" />
+            STRIKE TIMELINE
+          </span>
+          <span className="text-[10px] px-2.5 py-0.5 rounded-full border border-purple-500/40 text-purple-300 bg-[#1a1033] font-mono">
+            {intervals.length} EVENT WINDOW{intervals.length === 1 ? '' : 'S'}
           </span>
         </div>
-        <div className="font-mono text-xs">
-          <span className="text-cyan-400">{currentTime.toFixed(1)}s</span> / {duration.toFixed(1)}s
+        <div className="font-mono text-[11px] flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-purple-400/60" />
+          <span className="text-purple-300 font-bold">{currentTime.toFixed(2)}s</span>
+          <span className="text-slate-500">/</span>
+          <span className="text-slate-300">{duration.toFixed(2)}s</span>
         </div>
       </div>
 
-      {/* Main Bar */}
+      {/* Main Scrubber Track */}
       <div
         onClick={handleTimelineClick}
-        className="relative w-full h-9 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer overflow-hidden group select-none"
+        className="relative w-full h-11 bg-black/90 border border-purple-900/40 rounded-xl cursor-pointer overflow-hidden group select-none shadow-inner"
       >
-        {/* Buffered Interval Regions (+1s / -1s) */}
+        {/* Buffered Interval Regions */}
         {intervals.map((inv) => {
           const startPct = (inv.start / duration) * 100;
           const widthPct = ((inv.end - inv.start) / duration) * 100;
@@ -55,62 +65,34 @@ export const TimelineViewer: React.FC<TimelineViewerProps> = ({
             <div
               key={inv.id}
               style={{ left: `${startPct}%`, width: `${widthPct}%` }}
-              className="absolute top-0 bottom-0 bg-cyan-500/20 border-x border-cyan-400/60 pointer-events-none transition-all group-hover:bg-cyan-500/30"
-              title={`Event: ${inv.start}s - ${inv.end}s (+1s buffer)`}
+              className="absolute top-0 bottom-0 bg-purple-600/30 border-x border-purple-400 pointer-events-none transition-all group-hover:bg-purple-600/40"
+              title={`Clip Window: ${inv.start.toFixed(1)}s - ${inv.end.toFixed(1)}s (${inv.duration.toFixed(1)}s window)`}
             />
           );
         })}
 
-        {/* Strike Flash Pins */}
+        {/* Strike Flash Marker Pins */}
         {detections.map((det, idx) => {
           const pinPct = (det.timestamp / duration) * 100;
           return (
             <div
               key={`pin-${idx}`}
               style={{ left: `${pinPct}%` }}
-              className="absolute top-0 bottom-0 w-0.5 bg-amber-400 pointer-events-none z-10 shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+              className="absolute top-0 bottom-0 w-0.5 bg-white pointer-events-none z-10 shadow-[0_0_12px_#c084fc]"
             />
           );
         })}
 
-        {/* Playhead */}
+        {/* Playhead Position Scrubber */}
         <div
-          style={{ left: `${currentPercent}%` }}
-          className="absolute top-0 bottom-0 w-1 bg-white pointer-events-none z-20 shadow-[0_0_10px_#fff]"
+          style={{ left: `${(currentTime / duration) * 100}%` }}
+          className="absolute top-0 bottom-0 w-0.5 bg-white z-20 pointer-events-none shadow-[0_0_8px_#ffffff]"
         >
-          <div className="w-3 h-3 -ml-1 -top-1 bg-white rounded-full border border-slate-950 shadow" />
+          <div className="w-2.5 h-2.5 rounded-full bg-purple-400 -translate-x-[4px] -translate-y-0.5 shadow-[0_0_10px_#a855f7]" />
         </div>
-      </div>
-
-      {/* Legend & quick jump buttons */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-1.5">
-            <div className="w-2.5 h-2.5 rounded bg-cyan-500/40 border border-cyan-400" />
-            <span>+1s Buffered Event Clip</span>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <div className="w-1.5 h-3 bg-amber-400 rounded-sm" />
-            <span>Lightning Strike Flash</span>
-          </div>
-        </div>
-
-        {intervals.length > 0 && (
-          <div className="flex items-center space-x-1.5">
-            <span className="text-slate-500">Jump to:</span>
-            {intervals.map((inv, idx) => (
-              <button
-                key={inv.id}
-                type="button"
-                onClick={() => onSeek(inv.start)}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-750 text-slate-300 font-mono text-[10px] transition"
-              >
-                Clip #{idx + 1} ({inv.start.toFixed(1)}s)
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
 };
+
+export default TimelineViewer;

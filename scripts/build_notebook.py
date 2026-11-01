@@ -204,7 +204,7 @@ results = process_video_pipeline(
     video_path=demo_video_path,
     model_path="models/lightning_yolo.pt",
     output_dir=output_dir,
-    conf_threshold=0.15,
+    conf_threshold=0.45,
     buffer_seconds=1.0,
     frame_stride=1
 )
@@ -231,7 +231,7 @@ Use the function below to process any real-world lightning video. Simply provide
 add_code('''def detect_and_clip_lightning(
     video_path: str,
     output_dir: str = "output_clips",
-    conf_threshold: float = 0.25,
+    conf_threshold: float = 0.45,
     buffer_seconds: float = 1.0,
     frame_stride: int = 1
 ):

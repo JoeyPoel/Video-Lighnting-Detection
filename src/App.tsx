@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { Header } from './components/Header.tsx';
 import { VideoUploader } from './components/VideoUploader.tsx';
 import { TimelineViewer } from './components/TimelineViewer.tsx';
 import { ClipCard } from './components/ClipCard.tsx';
+import { ThunderStrike } from './components/ThunderStrike.tsx';
+import { GlowButton } from './components/common/GlowButton.tsx';
+import { WireBadge } from './components/common/WireBadge.tsx';
 import { analyzeVideoForLightning, type AnalysisProgress } from './utils/lightningAnalyzer.ts';
-import { sliceVideoInterval } from './utils/videoSlicer.ts';
+import { sliceVideoInterval, createLightningMontage, type MontageProgress } from './utils/videoSlicer.ts';
 import type { StrikeDetection, StrikeInterval, ExtractedClip } from './types.ts';
 import {
   Zap,
@@ -15,31 +17,90 @@ import {
   Sliders,
   CheckCircle2,
   FileVideo,
+  Gauge,
+  Layers,
+  Sparkles,
+  RotateCcw,
+  Film,
+  Download,
 } from 'lucide-react';
 
+/**
+ * VoltClip — Precision Lightning Strike Detection & Event Buffer Slicer
+ * Ultra-clean, atmospheric dark void studio.
+ */
 export const App: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoName, setVideoName] = useState<string>('');
   const [duration, setDuration] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isStormActive, setIsStormActive] = useState<boolean>(true);
 
-  // Settings
-  const [bufferSeconds, setBufferSeconds] = useState<number>(1.0);
-  const [sensitivity, setSensitivity] = useState<number>(0.35);
+  // Detection Settings (default buffer strictly 2.0 seconds)
+  const [bufferSeconds, setBufferSeconds] = useState<number>(2.0);
+  const [sensitivity, setSensitivity] = useState<number>(0.55);
 
-  // State
+  // Operation State
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [autoScanPending, setAutoScanPending] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [isSlicing, setIsSlicing] = useState<boolean>(false);
   const [slicingProgress, setSlicingProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Results
+  // Montage State
+  const [isGeneratingMontage, setIsGeneratingMontage] = useState<boolean>(false);
+  const [montageProgress, setMontageProgress] = useState<MontageProgress | null>(null);
+  const [montageClip, setMontageClip] = useState<ExtractedClip | null>(null);
+
+  // Strike & Clip Results
   const [detections, setDetections] = useState<StrikeDetection[]>([]);
   const [intervals, setIntervals] = useState<StrikeInterval[]>([]);
   const [extractedClips, setExtractedClips] = useState<ExtractedClip[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const runAnalysis = async (customVideo?: HTMLVideoElement) => {
+    const target = customVideo || videoRef.current;
+    if (!target) return;
+    try {
+      setIsAnalyzing(true);
+      setExtractedClips([]);
+      setMontageClip(null);
+
+      const result = await analyzeVideoForLightning(
+        target,
+        {
+          sensitivity,
+          bufferSeconds,
+          sampleFps: 25,
+        },
+        (prog, liveDets) => {
+          setAnalysisProgress(prog);
+          // Stream live strike pins stably onto timeline
+          if (liveDets) setDetections(liveDets);
+        }
+      );
+
+      setDetections(result.detections);
+      setIntervals(result.intervals);
+    } catch (err) {
+      console.error('Error during lightning analysis:', err);
+      alert('Analysis failed. Please check video format.');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalysisProgress(null);
+    }
+  };
+
+  const triggerAutoScanIfPending = (video: HTMLVideoElement) => {
+    if (autoScanPending && !isAnalyzing) {
+      setAutoScanPending(false);
+      setTimeout(() => {
+        runAnalysis(video);
+      }, 150);
+    }
+  };
 
   const handleVideoSelected = (blob: Blob, name: string) => {
     if (videoUrl) {
@@ -51,13 +112,30 @@ export const App: React.FC = () => {
     setDetections([]);
     setIntervals([]);
     setExtractedClips([]);
+    setMontageClip(null);
     setCurrentTime(0);
     setIsPlaying(false);
+    setAutoScanPending(true);
   };
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration || 0);
+      const dur = videoRef.current.duration || 0;
+      setDuration(dur);
+      if (dur > 0.05 && videoRef.current.currentTime === 0) {
+        videoRef.current.currentTime = 0.05;
+      }
+      triggerAutoScanIfPending(videoRef.current);
+    }
+  };
+
+  const handleLoadedData = () => {
+    if (videoRef.current) {
+      const dur = videoRef.current.duration || 0;
+      if (dur > 0.05 && videoRef.current.currentTime === 0) {
+        videoRef.current.currentTime = 0.05;
+      }
+      triggerAutoScanIfPending(videoRef.current);
     }
   };
 
@@ -85,32 +163,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const runAnalysis = async () => {
-    if (!videoRef.current) return;
-    try {
-      setIsAnalyzing(true);
-      setExtractedClips([]);
-      const result = await analyzeVideoForLightning(
-        videoRef.current,
-        {
-          sampleFps: 15,
-          sensitivity,
-          bufferSeconds,
-        },
-        (prog) => setAnalysisProgress(prog)
-      );
-
-      setDetections(result.detections);
-      setIntervals(result.intervals);
-    } catch (err) {
-      console.error('Error during lightning analysis:', err);
-      alert('Analysis failed. Please check video format.');
-    } finally {
-      setIsAnalyzing(false);
-      setAnalysisProgress(null);
-    }
-  };
-
   const runSliceAll = async () => {
     if (!videoRef.current || !intervals.length) return;
     try {
@@ -133,206 +185,447 @@ export const App: React.FC = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <Header />
+  const runGenerateMontage = async () => {
+    if (!videoRef.current || !intervals.length) return;
+    try {
+      setIsGeneratingMontage(true);
+      const montage = await createLightningMontage(
+        videoRef.current,
+        intervals,
+        (prog) => setMontageProgress(prog)
+      );
+      setMontageClip(montage);
+    } catch (err) {
+      console.error('Error creating lightning montage:', err);
+      alert('Failed to generate continuous montage video.');
+    } finally {
+      setIsGeneratingMontage(false);
+      setMontageProgress(null);
+    }
+  };
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Upload or Load Video Section */}
+  return (
+    <div className="relative min-h-screen text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white bg-transparent">
+      {/* Dynamic Ambient Lightning Thunderstorm Background Canvas */}
+      {isStormActive && (
+        <ThunderStrike
+          speed={45}
+        />
+      )}
+
+      {/* Zero-Lag Atmospheric Vignette (Hardware accelerated) */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none z-[1] bg-gradient-to-b from-[#07040d]/40 via-transparent to-[#07040d]/60"
+      />
+
+      {/* Floating Minimalist Storm Atmosphere Toggle in Top-Right */}
+      <div className="fixed top-5 right-5 sm:top-7 sm:right-7 z-50">
+        <button
+          type="button"
+          onClick={() => setIsStormActive((prev) => !prev)}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full font-mono text-[10px] tracking-[0.18em] uppercase transition-all border backdrop-blur-2xl shadow-lg ${
+            isStormActive
+              ? 'border-purple-500/40 text-purple-200 bg-[#1a1033]/60 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:bg-[#1a1033]/80'
+              : 'border-purple-950/60 text-slate-400 bg-[#07040d]/60 hover:text-white'
+          }`}
+        >
+          <Sparkles className="w-3 h-3 text-purple-400" />
+          <span>{isStormActive ? 'STORM FX' : 'MUTED'}</span>
+        </button>
+      </div>
+
+      {/* Main Centered Stage */}
+      <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20 flex flex-col justify-center">
         {!videoUrl ? (
-          <div className="max-w-2xl mx-auto py-12">
+          /* Centered Lightning Studio Hero & Uploader */
+          <div className="w-full space-y-12 sm:space-y-16 my-auto">
+            {/* Centerpiece Headline + Subtitle */}
+            <div className="text-center max-w-4xl mx-auto space-y-4">
+              <h1 className="font-editorial text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-[0.14em] sm:tracking-[0.2em] text-white uppercase plasma-glow-text whitespace-nowrap transition-all duration-700">
+                VØLT<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-fuchsia-200 to-white">CLIP</span>
+              </h1>
+
+              <p className="font-mono text-xs sm:text-sm tracking-[0.25em] text-purple-200/70 uppercase max-w-xl mx-auto">
+                PRECISION LIGHTNING DETECTION & BUFFER SLICER
+              </p>
+            </div>
+
+            {/* Video Dropzone */}
             <VideoUploader onVideoSelected={handleVideoSelected} />
+
+            {/* Soft Purple Divider */}
+            <div className="plasma-divider max-w-4xl mx-auto" />
+
+            {/* 3 Spec Cards with Frosted Blur */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
+                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
+                  <Gauge className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
+                  Instant Hardware Scan
+                </h3>
+                <p className="text-xs text-slate-300/80 leading-relaxed">
+                  Real-time quadrant differential analysis with high frame-rate temporal precision.
+                </p>
+              </div>
+
+              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
+                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
+                  Streetlamp Rejection
+                </h3>
+                <p className="text-xs text-slate-300/80 leading-relaxed">
+                  Rejects stationary lamps, building lights, and passing vehicle beams.
+                </p>
+              </div>
+
+              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
+                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
+                  <Zap className="w-5 h-5 fill-purple-400 text-purple-400" />
+                </div>
+                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
+                  ±2.0s Smart Padding
+                </h3>
+                <p className="text-xs text-slate-300/80 leading-relaxed">
+                  Preserves stepped leader genesis and thunder decay on every isolated clip.
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left 2 Cols: Player & Timeline */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Video Player Box */}
-              <div className="relative aspect-video bg-black rounded-3xl overflow-hidden border border-slate-800 shadow-2xl group">
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={() => setIsPlaying(false)}
-                  className="w-full h-full object-contain cursor-pointer"
-                  onClick={togglePlay}
-                  playsInline
-                />
-
-                {/* Overlay Controls */}
-                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={togglePlay}
-                    className="w-10 h-10 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center transition"
-                  >
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                  </button>
-
-                  <div className="text-xs font-mono text-slate-300 bg-slate-950/70 px-3 py-1.5 rounded-lg border border-slate-800">
-                    <span className="text-cyan-400">{currentTime.toFixed(2)}s</span> / {duration.toFixed(2)}s
-                  </div>
+          /* Active Studio: Single Unified Workspace */
+          <div className="space-y-6">
+            {/* Top Workspace Session Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0c071a]/50 border border-purple-500/25 rounded-2xl p-4 sm:px-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-9 h-9 rounded-xl bg-[#1a1033] border border-purple-500/40 flex items-center justify-center text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                  <FileVideo className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold text-white block truncate max-w-xs sm:max-w-md font-mono">
+                    {videoName}
+                  </span>
+                  <span className="text-[11px] font-mono text-purple-300/70">
+                    DURATION: {duration.toFixed(2)}S
+                  </span>
                 </div>
               </div>
 
-              {/* Scrubber Timeline */}
-              <TimelineViewer
-                duration={duration}
-                currentTime={currentTime}
-                detections={detections}
-                intervals={intervals}
-                onSeek={handleSeek}
-              />
+              <GlowButton
+                variant="secondary"
+                onClick={() => {
+                  if (videoUrl) URL.revokeObjectURL(videoUrl);
+                  setVideoUrl(null);
+                }}
+                className="py-2 px-6 text-xs"
+              >
+                SWITCH FOOTAGE
+              </GlowButton>
             </div>
 
-            {/* Right 1 Col: Control Dashboard */}
-            <div className="space-y-6">
-              {/* File Info & Configuration */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <FileVideo className="w-5 h-5 text-cyan-400" />
-                    <span className="text-sm font-semibold text-white truncate max-w-[180px]">
-                      {videoName}
-                    </span>
+            {/* Connected Stage & Controls Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left 2 Cols: Connected Video Player + Timeline Scrubber */}
+              <div className="lg:col-span-2 bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-2xl shadow-2xl">
+                {/* Player Box */}
+                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-purple-900/50 group shadow-inner">
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    preload="auto"
+                    muted={true}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onLoadedData={handleLoadedData}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={() => setIsPlaying(false)}
+                    className="w-full h-full object-contain cursor-pointer"
+                    onClick={togglePlay}
+                    playsInline
+                  />
+
+                  {/* Player Overlay Controls */}
+                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white flex items-center justify-center transition shadow-lg shadow-purple-500/40 hover:scale-105 active:scale-95"
+                    >
+                      {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                    </button>
+
+                    <div className="text-xs font-mono text-slate-200 bg-[#120b24]/90 px-3.5 py-1.5 rounded-full border border-purple-500/30">
+                      <span className="text-purple-300 font-bold">{currentTime.toFixed(2)}s</span> / {duration.toFixed(2)}s
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (videoUrl) URL.revokeObjectURL(videoUrl);
-                      setVideoUrl(null);
-                    }}
-                    className="text-xs text-slate-400 hover:text-white transition"
-                  >
-                    Change Video
-                  </button>
                 </div>
 
-                {/* Parameters */}
-                <div className="space-y-4 pt-2 border-t border-slate-800/80">
-                  <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-                    <Sliders className="w-4 h-4 text-cyan-400" />
-                    <span>Detection Parameters</span>
+                {/* Real-time Hardware Scan Progress */}
+                {isAnalyzing && analysisProgress && (
+                  <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-4 space-y-2 font-mono backdrop-blur-xl">
+                    <div className="flex items-center justify-between text-xs text-slate-200">
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                        Scanning video ({analysisProgress.fpsSpeed || 60} FPS)...
+                      </span>
+                      <span className="text-purple-300 font-bold">
+                        {analysisProgress.progressPercent}%
+                      </span>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
+                      <div
+                        style={{ width: `${analysisProgress.progressPercent}%` }}
+                        className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-300 shadow-[0_0_12px_#c084fc] transition-all duration-150"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Timeline Scrubber */}
+                <TimelineViewer
+                  duration={duration}
+                  currentTime={currentTime}
+                  detections={detections}
+                  intervals={intervals}
+                  onSeek={handleSeek}
+                />
+              </div>
+
+              {/* Right 1 Col: Unified Command Console */}
+              <div className="bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-6 space-y-6 backdrop-blur-2xl shadow-2xl flex flex-col justify-between">
+                <div className="space-y-6">
+                  <div className="flex items-center space-x-2 text-xs font-mono font-bold text-white uppercase tracking-widest border-b border-purple-900/30 pb-3">
+                    <Sliders className="w-4 h-4 text-purple-400" />
+                    <span>DETECTION CONSOLE</span>
                   </div>
 
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
-                      <span>Event Buffer Padding:</span>
-                      <span className="font-mono text-cyan-400 font-medium">±{bufferSeconds.toFixed(1)}s</span>
+                  {/* Buffer Slider */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-mono text-slate-200">
+                      <span>EVENT BUFFER:</span>
+                      <span className="text-purple-300 font-bold">±{bufferSeconds.toFixed(1)}S</span>
                     </div>
                     <input
                       type="range"
                       min="0.5"
-                      max="3.0"
+                      max="5.0"
                       step="0.5"
                       value={bufferSeconds}
                       onChange={(e) => setBufferSeconds(parseFloat(e.target.value))}
-                      className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                      className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
                     />
-                    <span className="text-[10px] text-slate-500 block mt-0.5">
-                      Adds {bufferSeconds}s before & {bufferSeconds}s after each strike (merged if overlapping).
+                    <span className="text-[10px] text-slate-400 font-mono block">
+                      Guarantees {bufferSeconds}s lead-in & {bufferSeconds}s tail buffer on each clip.
                     </span>
                   </div>
 
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
-                      <span>Flash Sensitivity:</span>
-                      <span className="font-mono text-cyan-400 font-medium">
+                  {/* Sensitivity Slider */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-mono text-slate-200">
+                      <span>FLASH SENSITIVITY:</span>
+                      <span className="text-purple-300 font-bold">
                         {(sensitivity * 100).toFixed(0)}%
                       </span>
                     </div>
                     <input
                       type="range"
                       min="0.1"
-                      max="0.9"
+                      max="0.95"
                       step="0.05"
                       value={sensitivity}
                       onChange={(e) => setSensitivity(parseFloat(e.target.value))}
-                      className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                      className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
                     />
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="pt-2 space-y-3">
-                  <button
-                    type="button"
-                    onClick={runAnalysis}
-                    disabled={isAnalyzing || isSlicing}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs tracking-wider uppercase transition shadow-lg shadow-cyan-500/20 flex items-center justify-center space-x-2 disabled:opacity-50"
+                {/* Action Buttons & Status Summary */}
+                <div className="space-y-3 pt-6 border-t border-purple-900/30">
+                  <GlowButton
+                    variant="primary"
+                    onClick={() => runAnalysis()}
+                    disabled={isAnalyzing || isSlicing || isGeneratingMontage}
+                    fullWidth={true}
                   >
                     {isAnalyzing ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Analyzing ({analysisProgress?.progressPercent || 0}%)</span>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        SCANNING ({analysisProgress?.progressPercent || 0}%)
                       </>
                     ) : (
                       <>
-                        <Zap className="w-4 h-4 fill-slate-950" />
-                        <span>Detect Lightning Strikes</span>
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        RE-SCAN FOOTAGE
                       </>
                     )}
-                  </button>
+                  </GlowButton>
 
+                  {/* Montage Generator Action */}
                   {intervals.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={runSliceAll}
-                      disabled={isSlicing || isAnalyzing}
-                      className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs tracking-wider uppercase transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 disabled:opacity-50"
+                    <GlowButton
+                      variant="secondary"
+                      onClick={runGenerateMontage}
+                      disabled={isGeneratingMontage || isSlicing || isAnalyzing}
+                      fullWidth={true}
                     >
-                      {isSlicing ? (
+                      {isGeneratingMontage ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>
-                            Slicing Clip {slicingProgress?.current}/{slicingProgress?.total}
-                          </span>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          STITCHING MONTAGE ({montageProgress?.overallPercent || 0}%)
                         </>
                       ) : (
                         <>
-                          <Scissors className="w-4 h-4" />
-                          <span>Extract {intervals.length} Event Clip{intervals.length === 1 ? '' : 's'}</span>
+                          <Film className="w-4 h-4 mr-2 text-purple-300" />
+                          EXPORT MONTAGE (ALL STRIKES)
                         </>
                       )}
-                    </button>
+                    </GlowButton>
+                  )}
+
+                  {/* Individual Clips Slicer Action */}
+                  {intervals.length > 0 && (
+                    <GlowButton
+                      variant="outline"
+                      onClick={runSliceAll}
+                      disabled={isSlicing || isGeneratingMontage || isAnalyzing}
+                      fullWidth={true}
+                    >
+                      {isSlicing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          SLICING CLIP {slicingProgress?.current}/{slicingProgress?.total}
+                        </>
+                      ) : (
+                        <>
+                          <Scissors className="w-4 h-4 mr-2" />
+                          EXTRACT {intervals.length} INDIVIDUAL CLIPS
+                        </>
+                      )}
+                    </GlowButton>
+                  )}
+
+                  {/* Identification Summary */}
+                  {intervals.length > 0 ? (
+                    <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-3.5 text-xs font-mono space-y-1.5 shadow-[0_0_15px_rgba(168,85,247,0.2)] backdrop-blur-xl">
+                      <div className="flex items-center space-x-1.5 text-purple-200 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-purple-400" />
+                        <span>{intervals.length} STRIKE EVENT(S) IDENTIFIED</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed font-sans">
+                        Isolated {detections.length} strike frame(s) into {intervals.length} merged window(s) of ±{bufferSeconds}s buffer.
+                      </p>
+                    </div>
+                  ) : (
+                    !isAnalyzing && detections.length === 0 && (
+                      <div className="bg-[#120b24]/60 border border-purple-900/30 rounded-xl p-3 text-[11px] font-mono text-purple-300/60 leading-relaxed flex items-center justify-between">
+                        <span>AWAITING SCAN COMMAND</span>
+                      </div>
+                    )
                   )}
                 </div>
-
-                {/* Summary Card */}
-                {intervals.length > 0 && (
-                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs space-y-2">
-                    <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{intervals.length} Lightning Event(s) Identified</span>
-                    </div>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">
-                      Identified {detections.length} total strike frame(s), buffered into {intervals.length} merged window(s) of ±{bufferSeconds}s.
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Extracted Clips Gallery */}
-        {extractedClips.length > 0 && (
-          <div className="pt-8 border-t border-slate-800 space-y-6">
-            <div className="flex items-center justify-between">
+        {/* Continuous Montage Feature Hero Card */}
+        {montageClip && (
+          <div className="pt-12 border-t border-purple-900/40 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
-                  <Scissors className="w-5 h-5 text-cyan-400" />
-                  <span>Isolated Lightning Clips (+1s Buffer)</span>
+                <h2 className="font-editorial font-bold text-2xl sm:text-3xl text-white tracking-wide flex items-center gap-2">
+                  <Film className="w-6 h-6 text-purple-400" />
+                  <span>ALL-STRIKES CONTINUOUS MONTAGE</span>
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Each clip contains the lightning discharge preceded by 1s lead-in and followed by 1s tail-off.
+                <p className="text-xs text-purple-300/70 font-mono uppercase tracking-wide">
+                  Every detected strike stitched back-to-back into a single seamless video.
                 </p>
               </div>
 
-              <span className="text-xs text-slate-400 font-mono">
-                {extractedClips.length} ready for download
-              </span>
+              <WireBadge variant="purple" pulse={true}>
+                MONTAGE READY • {montageClip.interval.duration.toFixed(1)}S
+              </WireBadge>
+            </div>
+
+            <div className="bg-[#0c071a]/70 border border-purple-500/30 rounded-3xl p-6 backdrop-blur-2xl shadow-2xl grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              <div className="md:col-span-2 relative aspect-video bg-black rounded-2xl overflow-hidden border border-purple-500/20 shadow-inner">
+                <video
+                  src={montageClip.blobUrl}
+                  controls
+                  playsInline
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div className="flex flex-col justify-between space-y-6 p-2">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full text-[11px] font-mono border border-purple-400/40 bg-purple-950/50 text-purple-300">
+                      {intervals.length} STRIKES COMBINED
+                    </span>
+                    <span className="px-3 py-1 rounded-full text-[11px] font-mono border border-purple-400/40 bg-purple-950/50 text-purple-300">
+                      ±{bufferSeconds}S BUFFERS
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-editorial font-bold text-white tracking-wide">
+                    Full Storm Sequence
+                  </h3>
+
+                  <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                    All isolated lightning discharges sequenced seamlessly in chronological order with full lead-in and decay padding.
+                  </p>
+
+                  <div className="bg-[#120b24]/90 border border-purple-900/40 rounded-xl p-3 font-mono text-[11px] space-y-1 text-slate-300">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Total Duration:</span>
+                      <span className="text-purple-300 font-bold">{montageClip.interval.duration.toFixed(2)}s</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Format:</span>
+                      <span className="text-purple-300 font-bold">{montageClip.filename.split('.').pop()?.toUpperCase()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">File Size:</span>
+                      <span className="text-purple-300 font-bold">{(montageClip.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <a
+                  href={montageClip.blobUrl}
+                  download={montageClip.filename}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-500 text-white font-mono text-xs font-bold uppercase tracking-wider transition shadow-lg shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>DOWNLOAD MONTAGE ({montageClip.filename.split('.').pop()?.toUpperCase()})</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Extracted Individual Clips Gallery */}
+        {extractedClips.length > 0 && (
+          <div className="pt-12 border-t border-purple-900/40 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-editorial font-bold text-2xl sm:text-3xl text-white tracking-wide flex items-center gap-2">
+                  <Scissors className="w-6 h-6 text-purple-400" />
+                  <span>INDIVIDUAL DISCHARGES (±{bufferSeconds}S BUFFER)</span>
+                </h2>
+                <p className="text-xs text-purple-300/70 font-mono uppercase tracking-wide">
+                  Lossless event cuts with {bufferSeconds}s lead-in and {bufferSeconds}s tail buffer.
+                </p>
+              </div>
+
+              <WireBadge variant="purple" pulse={true}>
+                {extractedClips.length} CLIP{extractedClips.length === 1 ? '' : 'S'} READY
+              </WireBadge>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -346,3 +639,5 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
+export default App;

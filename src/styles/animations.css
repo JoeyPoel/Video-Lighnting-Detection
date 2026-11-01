@@ -1,0 +1,35 @@
+@keyframes laserPulse {
+  0%, 100% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 10px var(--ls-color-blue-electric));
+  }
+  50% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 25px var(--ls-color-blue-laserCyan));
+  }
+}
+
+@keyframes strobeFlash {
+  0%, 94%, 98%, 100% {
+    opacity: 0;
+  }
+  95%, 97% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes laserSweep {
+  0% {
+    transform: rotate(-18deg) translateY(-2%);
+    opacity: 0.35;
+  }
+  50% {
+    transform: rotate(18deg) translateY(2%);
+    opacity: 0.85;
+  }
+  100% {
+    transform: rotate(-18deg) translateY(-2%);
+    opacity: 0.35;
+  }
+}
+

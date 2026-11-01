@@ -8,6 +8,10 @@ to prevent continuous false positives on streetlights, clouds, and dark skies.
 from __future__ import annotations
 
 import os
+# Prevent OpenMP multiple runtime initialization crash on Windows
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 import cv2
@@ -140,7 +144,7 @@ names:
 def calculate_strike_intervals(
     detected_timestamps: List[float],
     video_duration: float,
-    buffer_seconds: float = 1.0,
+    buffer_seconds: float = 2.0,
     merge_threshold: float = 0.5,
 ) -> List[Tuple[float, float]]:
     """Calculates buffered time intervals around detected strikes and merges overlapping events.
@@ -327,7 +331,7 @@ def create_synthetic_lightning_video(
 def detect_lightning_in_video(
     video_path: str | Path,
     model: Any,
-    conf_threshold: float = 0.50,
+    conf_threshold: float = 0.25,
     frame_stride: int = 1,
     max_static_frames: int = 10,
 ) -> Tuple[List[float], Dict[str, Any]]:
@@ -396,8 +400,8 @@ def detect_lightning_in_video(
                 )
                 brightness_delta = mean_brightness - rolling_baseline
 
-                # Sudden positive temporal luminance surge
-                has_flash_burst = brightness_delta > 12.0 or (mean_brightness > rolling_baseline * 1.30)
+                # Sensitive temporal luminance surge (catches subtle sky & distant flashes)
+                has_flash_burst = brightness_delta > 5.0 or (mean_brightness > rolling_baseline * 1.15)
 
                 # Run YOLO prediction
                 results = yolo_model(frame, conf=conf_threshold, verbose=False)
@@ -442,8 +446,9 @@ def detect_lightning_in_video(
                         is_static_light = frames_active > max_static_frames and not has_flash_burst
 
                         if not is_static_light:
-                            # Genuine strike requires either flash burst or strong model confidence
-                            if has_flash_burst or conf >= 0.60:
+                            # Genuine strike requires either a temporal flash burst (which real lightning produces)
+                            # or high model confidence (conf >= 0.55) to suppress stationary fixtures on initial frames
+                            if has_flash_burst or conf >= 0.55:
                                 has_verified_strike = True
 
                     active_tracks = [t for t in updated_tracks if frame_idx - t['last_frame'] <= 3]
@@ -473,8 +478,8 @@ def process_video_pipeline(
     video_path: str | Path,
     model_path: str | Path,
     output_dir: str | Path = "output_clips",
-    conf_threshold: float = 0.50,
-    buffer_seconds: float = 1.0,
+    conf_threshold: float = 0.25,
+    buffer_seconds: float = 2.0,
     frame_stride: int = 1,
 ) -> Dict[str, Any]:
     """End-to-end pipeline: detects verified lightning, expands intervals by +1s, and slices video clips.

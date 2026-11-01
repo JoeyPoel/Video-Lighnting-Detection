@@ -1,3 +1,4 @@
+# YOLO Lightning Strike Dataset Config
 path: C:/Users/joeyw/GitProjects/Video-Lighnting-Detection/yolo_dataset
 train: images/train
 val: images/val

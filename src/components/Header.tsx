@@ -1,37 +1,42 @@
 import React from 'react';
-import { Zap, Video, ShieldCheck } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onToggleStorm?: () => void;
+  isStormActive?: boolean;
+}
+
+/**
+ * Ultra-Clean Minimalist Header Navigation
+ * Stripped of clutter, highlighting pure brand wordmark and atmospheric control.
+ */
+export const Header: React.FC<HeaderProps> = ({ onToggleStorm, isStormActive = true }) => {
   return (
-    <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Zap className="w-6 h-6 text-white fill-white" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">VoltClip AI</h1>
-              <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-400">
-                YOLO & Vision
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">Lightning Strike Detection & +1s Event Buffer Slicer</p>
-          </div>
-        </div>
+    <header className="sticky top-0 z-40 w-full bg-[#07040d]/40 backdrop-blur-2xl select-none border-b border-purple-900/20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
+        {/* Clean Pure Wordmark */}
+        <span className="font-editorial italic tracking-tight text-xl sm:text-2xl text-white plasma-glow-text">
+          VØLTCLIP
+        </span>
 
-        <div className="flex items-center space-x-4">
-          <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Zero-Upload Client Processing</span>
-          </div>
-          <div className="flex items-center space-x-1.5 text-xs text-cyan-400 bg-cyan-950/50 border border-cyan-900 px-3 py-1.5 rounded-lg">
-            <Video className="w-4 h-4" />
-            <span>Buffer: -1s / +1s</span>
-          </div>
-        </div>
+        {/* Minimalist Storm Toggle */}
+        {onToggleStorm && (
+          <button
+            type="button"
+            onClick={onToggleStorm}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full font-mono text-[10px] tracking-[0.18em] uppercase transition-all border backdrop-blur-xl ${
+              isStormActive
+                ? 'border-purple-500/40 text-purple-200 bg-[#1a1033]/50 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
+                : 'border-purple-950/60 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-purple-400" />
+            <span>{isStormActive ? 'STORM FX' : 'MUTED'}</span>
+          </button>
+        )}
       </div>
     </header>
   );
 };
 
+export default Header;
