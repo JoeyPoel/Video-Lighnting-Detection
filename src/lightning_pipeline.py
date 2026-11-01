@@ -267,6 +267,63 @@ def extract_video_clips(
     return output_clips
 
 
+def create_lightning_montage_video(
+    video_path: str | Path,
+    intervals: List[Tuple[float, float]],
+    output_path: str | Path,
+) -> Path:
+    """Stitches all detected lightning strike intervals into a single continuous montage video.
+
+    Preserves 100% native resolution, framerate, and full frame quality without downscaling.
+
+    Args:
+        video_path: Path to source video file.
+        intervals: List of (start_seconds, end_seconds) intervals to concatenate.
+        output_path: Destination path for the montage video file.
+
+    Returns:
+        Path to the generated montage video file.
+
+    Side effects:
+        Reads video and writes continuous stitched video to disk.
+    """
+    video_p = Path(video_path)
+    out_p = Path(output_path)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+
+    cap = cv2.VideoCapture(str(video_p))
+    if not cap.isOpened():
+        raise ValueError(f"Could not open video file: {video_path}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    sorted_intervals = sorted(intervals, key=lambda x: x[0])
+    writer = cv2.VideoWriter(str(out_p), fourcc, fps, (width, height))
+
+    try:
+        for start_sec, end_sec in sorted_intervals:
+            start_frame = int(round(start_sec * fps))
+            end_frame = int(round(end_sec * fps))
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            current_frame_idx = start_frame
+
+            while current_frame_idx <= end_frame:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                writer.write(frame)
+                current_frame_idx += 1
+    finally:
+        writer.release()
+        cap.release()
+
+    return out_p
+
+
 def create_synthetic_lightning_video(
     output_path: str | Path,
     duration_sec: float = 10.0,

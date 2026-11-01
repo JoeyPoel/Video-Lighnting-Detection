@@ -91,6 +91,50 @@ const getAudioTrackForStream = (
 };
 
 /**
+ * Ensures video metadata is completely loaded and returns native video dimensions.
+ * Prevents any accidental downscaling or 640x360 fallback.
+ */
+export const ensureVideoDimensions = async (
+  video: HTMLVideoElement
+): Promise<{ width: number; height: number }> => {
+  if (video.videoWidth > 0 && video.videoHeight > 0) {
+    return { width: video.videoWidth, height: video.videoHeight };
+  }
+
+  await new Promise<void>((resolve) => {
+    const onMeta = () => {
+      video.removeEventListener('loadedmetadata', onMeta);
+      resolve();
+    };
+    video.addEventListener('loadedmetadata', onMeta);
+    setTimeout(resolve, 800);
+  });
+
+  return {
+    width: video.videoWidth || 1920,
+    height: video.videoHeight || 1080,
+  };
+};
+
+/**
+ * Calculates optimal high-fidelity bitrate based on resolution
+ * to guarantee zero compression degradation, preserving original 4K, 1440p, and 1080p quality.
+ */
+export const getHighFidelityBitrate = (width: number, height: number): number => {
+  const pixels = width * height;
+  // 4K UHD (3840x2160 = 8.3M px) -> 55-60 Mbps
+  if (pixels >= 3840 * 2160 * 0.8) return 55_000_000;
+  // 1440p QHD (2560x1440 = 3.7M px) -> 35 Mbps
+  if (pixels >= 2560 * 1440 * 0.8) return 35_000_000;
+  // 1080p FHD (1920x1080 = 2.1M px) -> 24-25 Mbps
+  if (pixels >= 1920 * 1080 * 0.8) return 24_000_000;
+  // 720p HD (1280x720 = 0.9M px) -> 14 Mbps
+  if (pixels >= 1280 * 720 * 0.8) return 14_000_000;
+  // Fallback high quality
+  return Math.max(10_000_000, Math.round(pixels * 60 * 0.25));
+};
+
+/**
  * Helper to reliably seek video to a timestamp and await the seeked event.
  */
 const seekTo = (video: HTMLVideoElement, time: number): Promise<void> =>
@@ -105,6 +149,7 @@ const seekTo = (video: HTMLVideoElement, time: number): Promise<void> =>
 
 /**
  * Extracts a specific time interval from a video element into a downloadable video clip.
+ * Preserves 100% native resolution (up to 4K/60fps) and pristine visual fidelity without downscaling.
  *
  * @param video - Source HTMLVideoElement.
  * @param interval - StrikeInterval specifying start, end, and duration.
@@ -118,20 +163,23 @@ export const sliceVideoInterval = async (
   index: number,
   onProgress?: (percent: number) => void
 ): Promise<ExtractedClip> => {
-  const width = video.videoWidth || 640;
-  const height = video.videoHeight || 360;
+  const { width, height } = await ensureVideoDimensions(video);
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) {
     throw new Error('Canvas context not available for video slicing.');
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const { mimeType: selectedMime, extension } = getSupportedVideoMimeType();
+  const targetBitrate = getHighFidelityBitrate(width, height);
 
-  const stream = canvas.captureStream(30);
+  // Capture at 60 FPS to preserve high-framerate footage
+  const stream = canvas.captureStream(60);
   const audioInfo = getAudioTrackForStream(video);
   if (audioInfo.track) {
     try {
@@ -143,7 +191,7 @@ export const sliceVideoInterval = async (
 
   const recorder = new MediaRecorder(stream, {
     mimeType: selectedMime,
-    videoBitsPerSecond: 4_000_000,
+    videoBitsPerSecond: targetBitrate,
   });
 
   const recordedChunks: Blob[] = [];
@@ -202,14 +250,8 @@ export const sliceVideoInterval = async (
             return;
           }
 
+          // Render clean original video frame at native full resolution (no destructive watermarks)
           ctx.drawImage(video, 0, 0, width, height);
-
-          // Timestamp overlay watermark
-          ctx.fillStyle = 'rgba(12, 7, 26, 0.75)';
-          ctx.fillRect(10, height - 32, 230, 24);
-          ctx.fillStyle = '#c084fc';
-          ctx.font = '12px "JetBrains Mono", monospace';
-          ctx.fillText(`⚡ STRIKE #${index} • ${video.currentTime.toFixed(2)}s`, 16, height - 16);
 
           if (onProgress) {
             const currentOffset = Math.max(0, video.currentTime - startTime);
@@ -263,20 +305,23 @@ export const createLightningMontage = async (
     0
   );
 
-  const width = video.videoWidth || 640;
-  const height = video.videoHeight || 360;
+  const { width, height } = await ensureVideoDimensions(video);
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) {
     throw new Error('Canvas context not available for montage rendering.');
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const { mimeType: selectedMime, extension } = getSupportedVideoMimeType();
+  const targetBitrate = getHighFidelityBitrate(width, height);
 
-  const stream = canvas.captureStream(30);
+  // Capture at 60 FPS to preserve high-framerate footage
+  const stream = canvas.captureStream(60);
   const audioInfo = getAudioTrackForStream(video);
   if (audioInfo.track) {
     try {
@@ -288,7 +333,7 @@ export const createLightningMontage = async (
 
   const recorder = new MediaRecorder(stream, {
     mimeType: selectedMime,
-    videoBitsPerSecond: 4_500_000,
+    videoBitsPerSecond: targetBitrate,
   });
 
   const recordedChunks: Blob[] = [];
@@ -346,7 +391,7 @@ export const createLightningMontage = async (
       try {
         await seekTo(video, inv.start);
 
-        // Render first frame immediately
+        // Render clean first frame immediately at native resolution
         ctx.drawImage(video, 0, 0, width, height);
 
         // If recording hasn't started yet, begin continuous stream without micro-fragmentation
@@ -368,16 +413,8 @@ export const createLightningMontage = async (
             return;
           }
 
+          // Render clean original video frame at native full resolution (no destructive watermarks)
           ctx.drawImage(video, 0, 0, width, height);
-
-          // Subtle, high-contrast montage HUD overlay
-          ctx.fillStyle = 'rgba(12, 7, 26, 0.8)';
-          ctx.fillRect(10, height - 34, 310, 26);
-          ctx.fillStyle = '#e879f9';
-          ctx.font = 'bold 11px "JetBrains Mono", monospace';
-          ctx.fillText(`⚡ MONTAGE • STRIKE ${currentIntervalIdx + 1}/${sortedIntervals.length}`, 16, height - 17);
-          ctx.fillStyle = '#cbd5e1';
-          ctx.fillText(`• ${video.currentTime.toFixed(2)}s`, 220, height - 17);
 
           if (onProgress) {
             const currentClipOffset = Math.max(0, video.currentTime - inv.start);

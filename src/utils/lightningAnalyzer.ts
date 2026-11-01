@@ -252,8 +252,24 @@ export const analyzeVideoForLightning = async (
   const useYolo = options.useYolo ?? true; // Enable in-browser YOLO neural engine by default
   const yoloConfidence = options.yoloConfidence ?? 0.20;
 
-  const width = sourceVideo.videoWidth || 640;
-  const height = sourceVideo.videoHeight || 360;
+  let width = sourceVideo.videoWidth;
+  let height = sourceVideo.videoHeight;
+  if (!width || !height) {
+    await new Promise<void>((resolve) => {
+      if (sourceVideo.readyState >= 1 && sourceVideo.videoWidth > 0) {
+        resolve();
+        return;
+      }
+      const onMeta = () => {
+        sourceVideo.removeEventListener('loadedmetadata', onMeta);
+        resolve();
+      };
+      sourceVideo.addEventListener('loadedmetadata', onMeta);
+      setTimeout(resolve, 600);
+    });
+    width = sourceVideo.videoWidth || 1920;
+    height = sourceVideo.videoHeight || 1080;
+  }
 
   // Ultra-fast 96x54 downsampled processing canvas
   const downWidth = 96;

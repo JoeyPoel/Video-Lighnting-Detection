@@ -10,6 +10,7 @@ from src.lightning_pipeline import (
     calculate_strike_intervals,
     create_synthetic_lightning_video,
     extract_video_clips,
+    create_lightning_montage_video,
     detect_lightning_in_video,
     process_video_pipeline,
 )
@@ -157,3 +158,18 @@ def test_real_lightning_video_detection_and_slicing(tmp_path: Path):
     assert len(sliced_clips) == 1
     assert sliced_clips[0].exists()
     assert sliced_clips[0].stat().st_size > 0
+
+
+def test_create_lightning_montage_video(tmp_path: Path):
+    """Verify high-quality montage video creation stitching multiple intervals."""
+    test_video = tmp_path / "test_montage_source.mp4"
+    create_synthetic_lightning_video(test_video, duration_sec=4.0, fps=20, strike_times=(1.0, 3.0))
+
+    montage_out = tmp_path / "montage.mp4"
+    result_path = create_lightning_montage_video(
+        test_video,
+        [(0.5, 1.5), (2.5, 3.5)],
+        montage_out,
+    )
+    assert result_path.exists()
+    assert result_path.stat().st_size > 0
