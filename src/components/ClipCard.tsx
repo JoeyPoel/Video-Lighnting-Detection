@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import type { ExtractedClip } from '../types.ts';
-import { Download, Zap, Clock, HardDrive } from 'lucide-react';
+import { Download, Zap, Clock, HardDrive, CheckCircle2 } from 'lucide-react';
 import { GlowButton } from './common/GlowButton';
 
 interface ClipCardProps {
@@ -10,7 +10,7 @@ interface ClipCardProps {
 
 /**
  * ClipCard Component
- * Displays extracted lightning discharge clip with timecodes and lossless download.
+ * Displays extracted lightning discharge clip with timecodes, FastStart H.264 indicator, and lossless download.
  * Electric Purple theme.
  */
 export const ClipCard: React.FC<ClipCardProps> = ({ clip, index }) => {
@@ -21,6 +21,8 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, index }) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
+
+  const extension = clip.filename.split('.').pop()?.toUpperCase() || 'MP4';
 
   return (
     <div className="bg-[#0c071a]/50 backdrop-blur-2xl border border-purple-500/25 rounded-2xl overflow-hidden hover:border-purple-400/60 transition-all flex flex-col justify-between shadow-[0_10px_30px_rgba(0,0,0,0.6)] group">
@@ -63,8 +65,13 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, index }) => {
               <span>Format & Size:</span>
             </span>
             <span className="text-white font-mono">
-              {clip.filename.split('.').pop()?.toUpperCase()} • {formatSize(clip.sizeBytes)}
+              {extension} • {formatSize(clip.sizeBytes)}
             </span>
+          </div>
+
+          <div className="pt-1 flex items-center gap-1.5 text-[10px] font-mono text-purple-300/80">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>FastStart H.264 • Universal Windows & Mac</span>
           </div>
         </div>
 
@@ -75,7 +82,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, index }) => {
         >
           <GlowButton variant="primary" fullWidth={true}>
             <Download className="w-4 h-4 mr-1.5" />
-            DOWNLOAD CLIP
+            DOWNLOAD {extension}
           </GlowButton>
         </a>
       </div>

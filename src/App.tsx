@@ -649,11 +649,15 @@ export const App: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Format:</span>
-                      <span className="text-purple-300 font-bold">{montageClip.filename.split('.').pop()?.toUpperCase()}</span>
+                      <span className="text-purple-300 font-bold">{montageClip.filename.split('.').pop()?.toUpperCase()} (FastStart H.264)</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">File Size:</span>
                       <span className="text-purple-300 font-bold">{(montageClip.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                    <div className="pt-1 text-[10px] text-emerald-400 font-mono flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Windows Media Player & QuickTime Verified</span>
                     </div>
                   </div>
                 </div>

@@ -43,6 +43,7 @@ htmlcov/
 # ML runs & Temporary checkpoints
 runs/
 .ultralytics/
+/yolo11n.pt
 demo_storm.mp4
 output_clips/
 lightning_clips/
