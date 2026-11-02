@@ -144,12 +144,12 @@ let scratchCtx: CanvasRenderingContext2D | null = null;
  * Runs YOLO11 neural object detection on a video frame.
  *
  * @param source - HTMLVideoElement or HTMLCanvasElement containing current frame.
- * @param confThreshold - Confidence threshold for positive lightning detection (default 0.25).
+ * @param confThreshold - Confidence threshold for positive lightning detection (default 0.20).
  * @returns YoloDetectionResult with lightning presence flag, max confidence, and bounding boxes.
  */
 export const runYoloDetectionOnFrame = async (
   source: CanvasImageSource,
-  confThreshold: number = 0.25
+  confThreshold: number = 0.20
 ): Promise<YoloDetectionResult> => {
   if (!scratchCanvas) {
     scratchCanvas = document.createElement('canvas');

@@ -295,38 +295,10 @@ export const analyzeVideoForLightning = async (
   const detector = new LightningTemporalDetector(sensitivity);
   const detections: StrikeDetection[] = [];
 
-  // Prepare offscreen worker video
-  const scanVideo = document.createElement('video');
-  scanVideo.src = sourceVideo.src;
-  scanVideo.muted = true;
-  scanVideo.playsInline = true;
-  scanVideo.preload = 'auto';
-  scanVideo.crossOrigin = 'anonymous';
-
-  try {
-    scanVideo.load();
-  } catch {
-    // Ignore in sandboxed environments
-  }
-
-  await new Promise<void>((resolve) => {
-    if (scanVideo.readyState >= 2) {
-      resolve();
-      return;
-    }
-    const onLoaded = () => {
-      scanVideo.removeEventListener('loadeddata', onLoaded);
-      scanVideo.removeEventListener('canplay', onLoaded);
-      resolve();
-    };
-    scanVideo.addEventListener('loadeddata', onLoaded);
-    scanVideo.addEventListener('canplay', onLoaded);
-    setTimeout(resolve, 600);
-  });
-
-  const workerVideo = scanVideo.readyState >= 2 ? scanVideo : sourceVideo;
+  // Use the primary video element directly for reliable hardware decoding and canvas extraction
+  const workerVideo = sourceVideo;
   const originalSourceTime = sourceVideo.currentTime;
-  const isUsingSource = workerVideo === sourceVideo;
+  const originalPaused = sourceVideo.paused;
 
   const scanDuration = workerVideo.duration && !isNaN(workerVideo.duration) && workerVideo.duration > 0
     ? workerVideo.duration
@@ -352,45 +324,48 @@ export const analyzeVideoForLightning = async (
   for (let step = 0; step < totalSteps; step++) {
     const t = Math.min(step * stepSeconds, scanDuration - 0.01);
 
-    // Fast seek with 25ms timeout
-    await new Promise<void>((resolve) => {
-      let doneCalled = false;
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const done = () => {
-        if (!doneCalled) {
-          doneCalled = true;
-          if (timer) clearTimeout(timer);
-          workerVideo.removeEventListener('seeked', done);
-          resolve();
-        }
-      };
-      timer = setTimeout(done, 25);
-      workerVideo.addEventListener('seeked', done, { once: true });
-      try {
-        if ('fastSeek' in workerVideo && typeof workerVideo.fastSeek === 'function') {
-          workerVideo.fastSeek(t);
-        } else {
+    // Reliable frame seek with standard currentTime and seeked listener
+    if (Math.abs(workerVideo.currentTime - t) > 0.01) {
+      await new Promise<void>((resolve) => {
+        let doneCalled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const done = () => {
+          if (!doneCalled) {
+            doneCalled = true;
+            if (timer) clearTimeout(timer);
+            workerVideo.removeEventListener('seeked', done);
+            resolve();
+          }
+        };
+        timer = setTimeout(done, 120);
+        workerVideo.addEventListener('seeked', done, { once: true });
+        try {
           workerVideo.currentTime = t;
+        } catch {
+          done();
         }
-      } catch {
-        done();
-      }
-    });
+      });
+    }
 
     try {
+      // 1. Extract downsampled frame stats for temporal baseline & static light suppression
+      ctx.drawImage(workerVideo, 0, 0, downWidth, downHeight);
+      const frameData = ctx.getImageData(0, 0, downWidth, downHeight);
+      const stats = calculateFrameStats(frameData.data, downWidth, downHeight);
+      const temporalRes = detector.processFrame(stats);
+
       let isStrike = false;
       let finalConfidence = 0;
       let bbox: [number, number, number, number] | undefined = undefined;
       let explanation: string | undefined = undefined;
 
       if (useYolo) {
-        // Pure YOLO11 Object Detection: Only real lightning stroke channels are accepted
         try {
           const yoloResult = await runYoloDetectionOnFrame(workerVideo, modelConfidence);
           if (yoloResult.boxes.length > 0) {
             const bestBox = yoloResult.boxes[0];
             isStrike = true;
-            finalConfidence = bestBox.confidence;
+            finalConfidence = Math.max(bestBox.confidence, temporalRes.confidence);
             bbox = [bestBox.x1, bestBox.y1, bestBox.x2, bestBox.y2];
 
             const xPct = Math.round(bestBox.x1 * 100);
@@ -400,20 +375,25 @@ export const analyzeVideoForLightning = async (
             const confPct = Math.round(bestBox.confidence * 100);
 
             explanation = `YOLO11 detected lightning stroke channel (${confPct}% confidence) at [X: ${xPct}%, Y: ${yPct}%, ${wPct}×${hPct}%].`;
+          } else if (temporalRes.isStrike) {
+            // Flash surge detected temporally even if thin bolt was below neural confidence threshold
+            isStrike = true;
+            finalConfidence = temporalRes.confidence;
+            explanation = `Atmospheric lightning flash surge (${Math.round(temporalRes.confidence * 100)}% delta).`;
           }
         } catch (yoloErr) {
           console.debug('YOLO inference unavailable for frame, fallback checking:', yoloErr);
+          if (temporalRes.isStrike) {
+            isStrike = true;
+            finalConfidence = temporalRes.confidence;
+            explanation = `Atmospheric lightning flash surge (${Math.round(temporalRes.confidence * 100)}% delta).`;
+          }
         }
       } else {
-        // Fallback temporal heuristic only if YOLO is explicitly turned off
-        ctx.drawImage(workerVideo, 0, 0, downWidth, downHeight);
-        const frameData = ctx.getImageData(0, 0, downWidth, downHeight);
-        const stats = calculateFrameStats(frameData.data, downWidth, downHeight);
-        const res = detector.processFrame(stats);
-        if (res.isStrike) {
+        if (temporalRes.isStrike) {
           isStrike = true;
-          finalConfidence = res.confidence;
-          explanation = `Luminance flash fallback detection (${Math.round(res.confidence * 100)}% delta).`;
+          finalConfidence = temporalRes.confidence;
+          explanation = `Atmospheric lightning flash surge (${Math.round(temporalRes.confidence * 100)}% delta).`;
         }
       }
 
@@ -433,7 +413,7 @@ export const analyzeVideoForLightning = async (
       console.warn('Frame sample error at t =', t, e);
     }
 
-    // Throttled UI progress report (every 100ms or on completion) to keep scanning blazing fast
+    // Throttled UI progress report (every 90ms or on completion) to keep scanning responsive
     const now = performance.now();
     const isLastStep = step === totalSteps - 1;
     if (onProgress && (now - lastProgressReportTime > 90 || isLastStep)) {
@@ -454,20 +434,20 @@ export const analyzeVideoForLightning = async (
       );
     }
 
-    // Yield to main thread every 20 steps
-    if (step % 20 === 0) {
+    // Yield to browser rendering loop periodically
+    if (step % 5 === 0) {
       await new Promise((r) => setTimeout(r, 0));
     }
   }
 
-  if (isUsingSource) {
-    try {
-      sourceVideo.currentTime = originalSourceTime;
-    } catch {
-      // Ignore
+  // Restore video playback state
+  try {
+    sourceVideo.currentTime = originalSourceTime;
+    if (!originalPaused) {
+      sourceVideo.play().catch(() => {});
     }
-  } else {
-    scanVideo.src = '';
+  } catch {
+    // Ignore
   }
 
   // Calculate clean final merged intervals with ±2.0s buffer

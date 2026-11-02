@@ -38,9 +38,9 @@ export const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isStormActive, setIsStormActive] = useState<boolean>(true);
 
-  // Detection Settings (pure YOLO object detection by default)
+  // Detection Settings (YOLO object detection + temporal flash verification)
   const [bufferSeconds, setBufferSeconds] = useState<number>(2.0);
-  const [modelConfidence, setModelConfidence] = useState<number>(0.40);
+  const [modelConfidence, setModelConfidence] = useState<number>(0.25);
   const [useYolo, setUseYolo] = useState<boolean>(true);
 
   // Operation State
@@ -466,15 +466,15 @@ export const App: React.FC = () => {
                     </div>
                     <input
                       type="range"
-                      min="0.15"
-                      max="0.85"
+                      min="0.10"
+                      max="0.75"
                       step="0.05"
                       value={modelConfidence}
                       onChange={(e) => setModelConfidence(parseFloat(e.target.value))}
                       className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
                     />
                     <span className="text-[10px] text-slate-400 font-mono block">
-                      Strict neural filter: only accepts strikes with confidence ≥ {(modelConfidence * 100).toFixed(0)}%. Rejects lights and ambient flash.
+                      Neural confidence filter (default 25%): strikes matching bolt channels or atmospheric flash surges are detected.
                     </span>
                   </div>
 
