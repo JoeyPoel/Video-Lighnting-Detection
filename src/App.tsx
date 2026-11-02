@@ -3,6 +3,7 @@ import { VideoUploader } from './components/VideoUploader.tsx';
 import { TimelineViewer } from './components/TimelineViewer.tsx';
 import { ClipCard } from './components/ClipCard.tsx';
 import { ThunderStrike } from './components/ThunderStrike.tsx';
+import { DetectionInspector } from './components/DetectionInspector.tsx';
 import { GlowButton } from './components/common/GlowButton.tsx';
 import { WireBadge } from './components/common/WireBadge.tsx';
 import { analyzeVideoForLightning, type AnalysisProgress } from './utils/lightningAnalyzer.ts';
@@ -37,9 +38,9 @@ export const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isStormActive, setIsStormActive] = useState<boolean>(true);
 
-  // Detection Settings (default buffer strictly 2.0 seconds)
+  // Detection Settings (pure YOLO object detection by default)
   const [bufferSeconds, setBufferSeconds] = useState<number>(2.0);
-  const [sensitivity, setSensitivity] = useState<number>(0.55);
+  const [modelConfidence, setModelConfidence] = useState<number>(0.40);
   const [useYolo, setUseYolo] = useState<boolean>(true);
 
   // Operation State
@@ -72,11 +73,10 @@ export const App: React.FC = () => {
       const result = await analyzeVideoForLightning(
         target,
         {
-          sensitivity,
+          modelConfidence,
           bufferSeconds,
-          sampleFps: 25,
+          sampleFps: 15,
           useYolo,
-          yoloConfidence: 0.20,
         },
         (prog, liveDets) => {
           setAnalysisProgress(prog);
@@ -363,11 +363,12 @@ export const App: React.FC = () => {
                         width: `${Math.max(4, (activeStrike.bbox[2] - activeStrike.bbox[0]) * 100)}%`,
                         height: `${Math.max(4, (activeStrike.bbox[3] - activeStrike.bbox[1]) * 100)}%`,
                       }}
-                      className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/10 pointer-events-none rounded shadow-[0_0_15px_#e879f9] transition-all duration-75 animate-pulse"
+                      className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/15 pointer-events-none rounded-lg shadow-[0_0_20px_#e879f9] transition-all duration-75"
                     >
-                      <span className="absolute -top-5 left-0 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-[#140b2b] text-fuchsia-300 border border-fuchsia-400/50 rounded shadow whitespace-nowrap">
-                        ⚡ YOLO {(activeStrike.confidence * 100).toFixed(0)}%
-                      </span>
+                      <div className="absolute -top-6 left-0 px-2 py-0.5 text-[10px] font-mono font-bold bg-[#140b2b]/95 text-fuchsia-200 border border-fuchsia-400/60 rounded shadow-lg whitespace-nowrap flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-fuchsia-400 fill-fuchsia-400" />
+                        <span>LIGHTNING BOLT • {(activeStrike.confidence * 100).toFixed(0)}%</span>
+                      </div>
                     </div>
                   )}
 
@@ -417,6 +418,14 @@ export const App: React.FC = () => {
                   intervals={intervals}
                   onSeek={handleSeek}
                 />
+
+                {/* YOLO11 Object Detection Explainability Inspector */}
+                <DetectionInspector
+                  activeStrike={activeStrike}
+                  allDetections={detections}
+                  currentTime={currentTime}
+                  onSeekToStrike={handleSeek}
+                />
               </div>
 
               {/* Right 1 Col: Unified Command Console */}
@@ -447,23 +456,26 @@ export const App: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Sensitivity Slider */}
+                  {/* YOLO Model Confidence Threshold Slider */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-mono text-slate-200">
-                      <span>FLASH SENSITIVITY:</span>
+                      <span>MODEL CONFIDENCE:</span>
                       <span className="text-purple-300 font-bold">
-                        {(sensitivity * 100).toFixed(0)}%
+                        {(modelConfidence * 100).toFixed(0)}%
                       </span>
                     </div>
                     <input
                       type="range"
-                      min="0.1"
-                      max="0.95"
+                      min="0.15"
+                      max="0.85"
                       step="0.05"
-                      value={sensitivity}
-                      onChange={(e) => setSensitivity(parseFloat(e.target.value))}
+                      value={modelConfidence}
+                      onChange={(e) => setModelConfidence(parseFloat(e.target.value))}
                       className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
                     />
+                    <span className="text-[10px] text-slate-400 font-mono block">
+                      Strict neural filter: only accepts strikes with confidence ≥ {(modelConfidence * 100).toFixed(0)}%. Rejects lights and ambient flash.
+                    </span>
                   </div>
 
                   {/* YOLO11 Neural ONNX Engine Toggle */}

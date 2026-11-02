@@ -202,10 +202,17 @@ export class LightningTemporalDetector {
 }
 
 export interface AnalysisOptions {
+  /** Legacy sensitivity parameter (0.1 to 0.95) */
   sensitivity?: number;
+  /** YOLO11 Model Confidence Threshold (0.15 to 0.85, default 0.40) */
+  modelConfidence?: number;
+  /** Video event buffer in seconds (default 2.0s) */
   bufferSeconds?: number;
+  /** Sampling frame rate during analysis (default 15 FPS) */
   sampleFps?: number;
+  /** Whether to use pure YOLO object detection (default true) */
   useYolo?: boolean;
+  /** Backwards compatibility alias for modelConfidence */
   yoloConfidence?: number;
 }
 
@@ -248,9 +255,12 @@ export const analyzeVideoForLightning = async (
 
   const sensitivity = options.sensitivity ?? 0.5;
   const bufferSeconds = options.bufferSeconds ?? 2.0; // Default 2.0s buffer
-  const sampleFps = options.sampleFps ?? 25; // 25 FPS high temporal precision
+  const sampleFps = options.sampleFps ?? 15; // 15 FPS sampling: high temporal precision, fast scan
   const useYolo = options.useYolo ?? true; // Enable in-browser YOLO neural engine by default
-  const yoloConfidence = options.yoloConfidence ?? 0.20;
+  const modelConfidence =
+    options.modelConfidence ??
+    options.yoloConfidence ??
+    (options.sensitivity !== undefined ? Math.max(0.20, Math.min(0.85, 1.0 - options.sensitivity * 0.7)) : 0.40);
 
   let width = sourceVideo.videoWidth;
   let height = sourceVideo.videoHeight;
@@ -368,36 +378,54 @@ export const analyzeVideoForLightning = async (
     });
 
     try {
-      ctx.drawImage(workerVideo, 0, 0, downWidth, downHeight);
-      const frameData = ctx.getImageData(0, 0, downWidth, downHeight);
-      const stats = calculateFrameStats(frameData.data, downWidth, downHeight);
-      const { isStrike, confidence } = detector.processFrame(stats);
+      let isStrike = false;
+      let finalConfidence = 0;
+      let bbox: [number, number, number, number] | undefined = undefined;
+      let explanation: string | undefined = undefined;
+
+      if (useYolo) {
+        // Pure YOLO11 Object Detection: Only real lightning stroke channels are accepted
+        try {
+          const yoloResult = await runYoloDetectionOnFrame(workerVideo, modelConfidence);
+          if (yoloResult.boxes.length > 0) {
+            const bestBox = yoloResult.boxes[0];
+            isStrike = true;
+            finalConfidence = bestBox.confidence;
+            bbox = [bestBox.x1, bestBox.y1, bestBox.x2, bestBox.y2];
+
+            const xPct = Math.round(bestBox.x1 * 100);
+            const yPct = Math.round(bestBox.y1 * 100);
+            const wPct = Math.round((bestBox.x2 - bestBox.x1) * 100);
+            const hPct = Math.round((bestBox.y2 - bestBox.y1) * 100);
+            const confPct = Math.round(bestBox.confidence * 100);
+
+            explanation = `YOLO11 detected lightning stroke channel (${confPct}% confidence) at [X: ${xPct}%, Y: ${yPct}%, ${wPct}×${hPct}%].`;
+          }
+        } catch (yoloErr) {
+          console.debug('YOLO inference unavailable for frame, fallback checking:', yoloErr);
+        }
+      } else {
+        // Fallback temporal heuristic only if YOLO is explicitly turned off
+        ctx.drawImage(workerVideo, 0, 0, downWidth, downHeight);
+        const frameData = ctx.getImageData(0, 0, downWidth, downHeight);
+        const stats = calculateFrameStats(frameData.data, downWidth, downHeight);
+        const res = detector.processFrame(stats);
+        if (res.isStrike) {
+          isStrike = true;
+          finalConfidence = res.confidence;
+          explanation = `Luminance flash fallback detection (${Math.round(res.confidence * 100)}% delta).`;
+        }
+      }
 
       if (isStrike) {
-        let finalConfidence = confidence;
-        let bbox: [number, number, number, number] | undefined = undefined;
-
-        if (useYolo) {
-          try {
-            const yoloResult = await runYoloDetectionOnFrame(workerVideo, yoloConfidence);
-            if (yoloResult.boxes.length > 0) {
-              const bestBox = yoloResult.boxes[0];
-              bbox = [bestBox.x1, bestBox.y1, bestBox.x2, bestBox.y2];
-              finalConfidence = Math.max(confidence, bestBox.confidence);
-            }
-          } catch (yoloErr) {
-            // Graceful fallback to pure temporal stats if ONNX loading/WebGL is unavailable
-            console.debug('YOLO inference skipped:', yoloErr);
-          }
-        }
-
         const lastDet = detections[detections.length - 1];
-        if (!lastDet || t - lastDet.timestamp >= 0.06) {
+        if (!lastDet || t - lastDet.timestamp >= 0.05) {
           detections.push({
             timestamp: Math.round(t * 100) / 100,
             confidence: Math.round(finalConfidence * 100) / 100,
             frameIndex: step,
             bbox,
+            explanation,
           });
         }
       }

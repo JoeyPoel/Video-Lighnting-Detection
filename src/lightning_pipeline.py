@@ -430,8 +430,6 @@ def detect_lightning_in_video(
 
     detected_timestamps: List[float] = []
     frame_idx = 0
-
-    recent_brightness: List[float] = []
     active_tracks: List[Dict[str, Any]] = []
 
     try:
@@ -443,24 +441,7 @@ def detect_lightning_in_video(
             if frame_idx % frame_stride == 0:
                 current_time = frame_idx / fps
 
-                # Calculate frame luminance
-                gray_small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (120, 68))
-                mean_brightness = float(np.mean(gray_small))
-                recent_brightness.append(mean_brightness)
-                if len(recent_brightness) > 20:
-                    recent_brightness.pop(0)
-
-                rolling_baseline = (
-                    sum(recent_brightness[:-1]) / max(1, len(recent_brightness) - 1)
-                    if len(recent_brightness) > 1
-                    else mean_brightness
-                )
-                brightness_delta = mean_brightness - rolling_baseline
-
-                # Sudden positive temporal luminance surge (flash burst verification)
-                has_flash_burst = brightness_delta > 12.0 or (mean_brightness > rolling_baseline * 1.30)
-
-                # Run YOLO prediction
+                # Run pure YOLO object detection on the frame
                 results = yolo_model(frame, conf=conf_threshold, verbose=False)
                 has_verified_strike = False
 
@@ -500,13 +481,11 @@ def detect_lightning_in_video(
                             updated_tracks.append(new_track)
                             frames_active = 1
 
-                        is_static_light = frames_active > max_static_frames and not has_flash_burst
+                        # Suppress stationary objects that persist indefinitely
+                        is_static_light = frames_active > max_static_frames
 
                         if not is_static_light:
-                            # Genuine strike requires either a temporal flash burst (which real lightning produces)
-                            # or strong model confidence (conf >= 0.60) to suppress stationary fixtures on initial frames
-                            if has_flash_burst or conf >= 0.60:
-                                has_verified_strike = True
+                            has_verified_strike = True
 
                     active_tracks = [t for t in updated_tracks if frame_idx - t['last_frame'] <= 3]
                 else:

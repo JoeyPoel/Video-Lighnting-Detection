@@ -11,6 +11,8 @@ export interface StrikeDetection {
   frameIndex: number;
   /** Optional bounding box [x1, y1, x2, y2] normalized [0, 1] from YOLO */
   bbox?: [number, number, number, number];
+  /** Plain text explainability summary of the detection */
+  explanation?: string;
 }
 
 export interface StrikeInterval {
