@@ -18,12 +18,11 @@ import {
   Sliders,
   CheckCircle2,
   FileVideo,
-  Gauge,
-  Layers,
   Sparkles,
   RotateCcw,
   Film,
   Download,
+  Eye,
 } from 'lucide-react';
 
 /**
@@ -49,6 +48,7 @@ export const App: React.FC = () => {
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [isSlicing, setIsSlicing] = useState<boolean>(false);
   const [slicingProgress, setSlicingProgress] = useState<{ current: number; total: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<'studio' | 'explainability'>('studio');
 
   // Montage State
   const [isGeneratingMontage, setIsGeneratingMontage] = useState<boolean>(false);
@@ -260,48 +260,6 @@ export const App: React.FC = () => {
 
             {/* Video Dropzone */}
             <VideoUploader onVideoSelected={handleVideoSelected} />
-
-            {/* Soft Purple Divider */}
-            <div className="plasma-divider max-w-4xl mx-auto" />
-
-            {/* 3 Spec Cards with Frosted Blur */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
-                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
-                  <Gauge className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
-                  Instant Hardware Scan
-                </h3>
-                <p className="text-xs text-slate-300/80 leading-relaxed">
-                  Real-time quadrant differential analysis with high frame-rate temporal precision.
-                </p>
-              </div>
-
-              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
-                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
-                  Streetlamp Rejection
-                </h3>
-                <p className="text-xs text-slate-300/80 leading-relaxed">
-                  Rejects stationary lamps, building lights, and passing vehicle beams.
-                </p>
-              </div>
-
-              <div className="bg-[#0c071a]/35 border border-purple-500/20 rounded-2xl p-6 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex flex-col justify-between space-y-3 hover:border-purple-400/40 transition">
-                <div className="w-10 h-10 rounded-xl bg-[#140b2b] border border-purple-500/30 flex items-center justify-center text-purple-300">
-                  <Zap className="w-5 h-5 fill-purple-400 text-purple-400" />
-                </div>
-                <h3 className="text-base font-editorial font-bold text-white tracking-wide">
-                  ±2.0s Smart Padding
-                </h3>
-                <p className="text-xs text-slate-300/80 leading-relaxed">
-                  Preserves stepped leader genesis and thunder decay on every isolated clip.
-                </p>
-              </div>
-            </div>
           </div>
         ) : (
           /* Active Studio: Single Unified Workspace */
@@ -322,275 +280,409 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              <GlowButton
-                variant="secondary"
-                onClick={() => {
-                  if (videoUrl) URL.revokeObjectURL(videoUrl);
-                  setVideoUrl(null);
-                }}
-                className="py-2 px-6 text-xs"
-              >
-                SWITCH FOOTAGE
-              </GlowButton>
-            </div>
-
-            {/* Connected Stage & Controls Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left 2 Cols: Connected Video Player + Timeline Scrubber */}
-              <div className="lg:col-span-2 bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-2xl shadow-2xl">
-                {/* Player Box */}
-                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-purple-900/50 group shadow-inner">
-                  <video
-                    ref={videoRef}
-                    src={videoUrl}
-                    preload="auto"
-                    muted={true}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onLoadedData={handleLoadedData}
-                    onTimeUpdate={handleTimeUpdate}
-                    onEnded={() => setIsPlaying(false)}
-                    className="w-full h-full object-contain cursor-pointer"
-                    onClick={togglePlay}
-                    playsInline
-                  />
-
-                  {/* Real-time YOLO Neural Bounding Box Overlay */}
-                  {activeStrike && activeStrike.bbox && (
-                    <div
-                      style={{
-                        left: `${activeStrike.bbox[0] * 100}%`,
-                        top: `${activeStrike.bbox[1] * 100}%`,
-                        width: `${Math.max(4, (activeStrike.bbox[2] - activeStrike.bbox[0]) * 100)}%`,
-                        height: `${Math.max(4, (activeStrike.bbox[3] - activeStrike.bbox[1]) * 100)}%`,
-                      }}
-                      className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/15 pointer-events-none rounded-lg shadow-[0_0_20px_#e879f9] transition-all duration-75"
-                    >
-                      <div className="absolute -top-6 left-0 px-2 py-0.5 text-[10px] font-mono font-bold bg-[#140b2b]/95 text-fuchsia-200 border border-fuchsia-400/60 rounded shadow-lg whitespace-nowrap flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-fuchsia-400 fill-fuchsia-400" />
-                        <span>LIGHTNING BOLT • {(activeStrike.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Player Overlay Controls */}
-                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={togglePlay}
-                      className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white flex items-center justify-center transition shadow-lg shadow-purple-500/40 hover:scale-105 active:scale-95"
-                    >
-                      {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                    </button>
-
-                    <div className="text-xs font-mono text-slate-200 bg-[#120b24]/90 px-3.5 py-1.5 rounded-full border border-purple-500/30">
-                      <span className="text-purple-300 font-bold">{currentTime.toFixed(2)}s</span> / {duration.toFixed(2)}s
-                    </div>
-                  </div>
-                </div>
-
-                {/* Real-time Hardware Scan Progress */}
-                {isAnalyzing && analysisProgress && (
-                  <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-4 space-y-2 font-mono backdrop-blur-xl">
-                    <div className="flex items-center justify-between text-xs text-slate-200">
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                        Scanning video ({analysisProgress.fpsSpeed || 60} FPS)...
-                      </span>
-                      <span className="text-purple-300 font-bold">
-                        {analysisProgress.progressPercent}%
-                      </span>
-                    </div>
-
-                    <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${analysisProgress.progressPercent}%` }}
-                        className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-300 shadow-[0_0_12px_#c084fc] transition-all duration-150"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Timeline Scrubber */}
-                <TimelineViewer
-                  duration={duration}
-                  currentTime={currentTime}
-                  detections={detections}
-                  intervals={intervals}
-                  onSeek={handleSeek}
-                />
-
-                {/* YOLO11 Object Detection Explainability Inspector */}
-                <DetectionInspector
-                  activeStrike={activeStrike}
-                  allDetections={detections}
-                  currentTime={currentTime}
-                  onSeekToStrike={handleSeek}
-                />
-              </div>
-
-              {/* Right 1 Col: Unified Command Console */}
-              <div className="bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-6 space-y-6 backdrop-blur-2xl shadow-2xl flex flex-col justify-between">
-                <div className="space-y-6">
-                  <div className="flex items-center space-x-2 text-xs font-mono font-bold text-white uppercase tracking-widest border-b border-purple-900/30 pb-3">
-                    <Sliders className="w-4 h-4 text-purple-400" />
-                    <span>DETECTION CONSOLE</span>
-                  </div>
-
-                  {/* Buffer Slider */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-mono text-slate-200">
-                      <span>EVENT BUFFER:</span>
-                      <span className="text-purple-300 font-bold">±{bufferSeconds.toFixed(1)}S</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="5.0"
-                      step="0.5"
-                      value={bufferSeconds}
-                      onChange={(e) => setBufferSeconds(parseFloat(e.target.value))}
-                      className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
-                    />
-                    <span className="text-[10px] text-slate-400 font-mono block">
-                      Guarantees {bufferSeconds}s lead-in & {bufferSeconds}s tail buffer on each clip.
-                    </span>
-                  </div>
-
-                  {/* YOLO Model Confidence Threshold Slider */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-mono text-slate-200">
-                      <span>MODEL CONFIDENCE:</span>
-                      <span className="text-purple-300 font-bold">
-                        {(modelConfidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.10"
-                      max="0.75"
-                      step="0.05"
-                      value={modelConfidence}
-                      onChange={(e) => setModelConfidence(parseFloat(e.target.value))}
-                      className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
-                    />
-                    <span className="text-[10px] text-slate-400 font-mono block">
-                      Neural confidence filter (default 25%): strikes matching bolt channels or atmospheric flash surges are detected.
-                    </span>
-                  </div>
-
-                  {/* YOLO11 Neural ONNX Engine Toggle */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#140b2b]/90 border border-purple-500/30 shadow-inner">
-                    <div className="flex items-center gap-2.5">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
-                      <div>
-                        <span className="text-xs font-mono font-bold text-white block">
-                          YOLO11 NEURAL ENGINE
-                        </span>
-                        <span className="text-[10px] text-purple-300/70 font-mono">
-                          Client-side ONNX WebGL
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setUseYolo((prev) => !prev)}
-                      className={`px-3 py-1 rounded-full font-mono text-[10px] uppercase font-bold border transition ${
-                        useYolo
-                          ? 'bg-purple-600 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]'
-                          : 'bg-black/60 border-purple-900/50 text-slate-400'
-                      }`}
-                    >
-                      {useYolo ? 'ACTIVE' : 'OFF'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Action Buttons & Status Summary */}
-                <div className="space-y-3 pt-6 border-t border-purple-900/30">
-                  <GlowButton
-                    variant="primary"
-                    onClick={() => runAnalysis()}
-                    disabled={isAnalyzing || isSlicing || isGeneratingMontage}
-                    fullWidth={true}
+              {/* View Mode Navigation Tabs & Action */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 p-1 bg-[#120b24]/90 border border-purple-500/30 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('studio')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-mono text-xs font-bold uppercase transition ${
+                      activeTab === 'studio'
+                        ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
                   >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        SCANNING ({analysisProgress?.progressPercent || 0}%)
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw className="w-4 h-4 mr-2" />
-                        RE-SCAN FOOTAGE
-                      </>
+                    <Film className="w-3.5 h-3.5" />
+                    <span>STUDIO</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('explainability')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-mono text-xs font-bold uppercase transition ${
+                      activeTab === 'explainability'
+                        ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5 text-purple-300" />
+                    <span>PROCESS & AI</span>
+                    {detections.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-950 border border-purple-400/40 text-purple-200">
+                        {detections.length}
+                      </span>
                     )}
-                  </GlowButton>
-
-                  {/* Montage Generator Action */}
-                  {intervals.length > 0 && (
-                    <GlowButton
-                      variant="secondary"
-                      onClick={runGenerateMontage}
-                      disabled={isGeneratingMontage || isSlicing || isAnalyzing}
-                      fullWidth={true}
-                    >
-                      {isGeneratingMontage ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          STITCHING MONTAGE ({montageProgress?.overallPercent || 0}%)
-                        </>
-                      ) : (
-                        <>
-                          <Film className="w-4 h-4 mr-2 text-purple-300" />
-                          EXPORT MONTAGE (ALL STRIKES)
-                        </>
-                      )}
-                    </GlowButton>
-                  )}
-
-                  {/* Individual Clips Slicer Action */}
-                  {intervals.length > 0 && (
-                    <GlowButton
-                      variant="outline"
-                      onClick={runSliceAll}
-                      disabled={isSlicing || isGeneratingMontage || isAnalyzing}
-                      fullWidth={true}
-                    >
-                      {isSlicing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          SLICING CLIP {slicingProgress?.current}/{slicingProgress?.total}
-                        </>
-                      ) : (
-                        <>
-                          <Scissors className="w-4 h-4 mr-2" />
-                          EXTRACT {intervals.length} INDIVIDUAL CLIPS
-                        </>
-                      )}
-                    </GlowButton>
-                  )}
-
-                  {/* Identification Summary */}
-                  {intervals.length > 0 ? (
-                    <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-3.5 text-xs font-mono space-y-1.5 shadow-[0_0_15px_rgba(168,85,247,0.2)] backdrop-blur-xl">
-                      <div className="flex items-center space-x-1.5 text-purple-200 font-bold">
-                        <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                        <span>{intervals.length} STRIKE EVENT(S) IDENTIFIED</span>
-                      </div>
-                      <p className="text-slate-300 text-[11px] leading-relaxed font-sans">
-                        Isolated {detections.length} strike frame(s) into {intervals.length} merged window(s) of ±{bufferSeconds}s buffer.
-                      </p>
-                    </div>
-                  ) : (
-                    !isAnalyzing && detections.length === 0 && (
-                      <div className="bg-[#120b24]/60 border border-purple-900/30 rounded-xl p-3 text-[11px] font-mono text-purple-300/60 leading-relaxed flex items-center justify-between">
-                        <span>AWAITING SCAN COMMAND</span>
-                      </div>
-                    )
-                  )}
+                  </button>
                 </div>
+
+                <GlowButton
+                  variant="secondary"
+                  onClick={() => {
+                    if (videoUrl) URL.revokeObjectURL(videoUrl);
+                    setVideoUrl(null);
+                  }}
+                  className="py-2 px-5 text-xs"
+                >
+                  SWITCH FOOTAGE
+                </GlowButton>
               </div>
             </div>
+
+            {activeTab === 'studio' ? (
+              <>
+                {/* Connected Stage & Controls Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left 2 Cols: Connected Video Player + Timeline Scrubber */}
+                  <div className="lg:col-span-2 bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-2xl shadow-2xl">
+                    {/* Player Box */}
+                    <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-purple-900/50 group shadow-inner">
+                      <video
+                        ref={videoRef}
+                        src={videoUrl}
+                        preload="auto"
+                        muted={true}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onLoadedData={handleLoadedData}
+                        onTimeUpdate={handleTimeUpdate}
+                        onEnded={() => setIsPlaying(false)}
+                        className="w-full h-full object-contain cursor-pointer"
+                        onClick={togglePlay}
+                        playsInline
+                      />
+
+                      {/* Real-time YOLO Neural Bounding Box Overlay */}
+                      {activeStrike && activeStrike.bbox && (
+                        <div
+                          style={{
+                            left: `${activeStrike.bbox[0] * 100}%`,
+                            top: `${activeStrike.bbox[1] * 100}%`,
+                            width: `${Math.max(4, (activeStrike.bbox[2] - activeStrike.bbox[0]) * 100)}%`,
+                            height: `${Math.max(4, (activeStrike.bbox[3] - activeStrike.bbox[1]) * 100)}%`,
+                          }}
+                          className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/15 pointer-events-none rounded-lg shadow-[0_0_20px_#e879f9] transition-all duration-75"
+                        >
+                          <div className="absolute -top-6 left-0 px-2 py-0.5 text-[10px] font-mono font-bold bg-[#140b2b]/95 text-fuchsia-200 border border-fuchsia-400/60 rounded shadow-lg whitespace-nowrap flex items-center gap-1">
+                            <Zap className="w-3 h-3 text-fuchsia-400 fill-fuchsia-400" />
+                            <span>LIGHTNING BOLT • {(activeStrike.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Player Overlay Controls */}
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={togglePlay}
+                          className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white flex items-center justify-center transition shadow-lg shadow-purple-500/40 hover:scale-105 active:scale-95"
+                        >
+                          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        </button>
+
+                        <div className="text-xs font-mono text-slate-200 bg-[#120b24]/90 px-3.5 py-1.5 rounded-full border border-purple-500/30">
+                          <span className="text-purple-300 font-bold">{currentTime.toFixed(2)}s</span> / {duration.toFixed(2)}s
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Real-time Hardware Scan Progress */}
+                    {isAnalyzing && analysisProgress && (
+                      <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-4 space-y-2 font-mono backdrop-blur-xl">
+                        <div className="flex items-center justify-between text-xs text-slate-200">
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                            Scanning video ({analysisProgress.fpsSpeed || 60} FPS)...
+                          </span>
+                          <span className="text-purple-300 font-bold">
+                            {analysisProgress.progressPercent}%
+                          </span>
+                        </div>
+
+                        <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
+                          <div
+                            style={{ width: `${analysisProgress.progressPercent}%` }}
+                            className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-300 shadow-[0_0_12px_#c084fc] transition-all duration-150"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Timeline Scrubber */}
+                    <TimelineViewer
+                      duration={duration}
+                      currentTime={currentTime}
+                      detections={detections}
+                      intervals={intervals}
+                      onSeek={handleSeek}
+                    />
+                  </div>
+
+                  {/* Right 1 Col: Unified Command Console */}
+                  <div className="bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-6 space-y-6 backdrop-blur-2xl shadow-2xl flex flex-col justify-between">
+                    <div className="space-y-6">
+                      <div className="flex items-center space-x-2 text-xs font-mono font-bold text-white uppercase tracking-widest border-b border-purple-900/30 pb-3">
+                        <Sliders className="w-4 h-4 text-purple-400" />
+                        <span>DETECTION CONSOLE</span>
+                      </div>
+
+                      {/* Buffer Slider */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-mono text-slate-200">
+                          <span>EVENT BUFFER:</span>
+                          <span className="text-purple-300 font-bold">±{bufferSeconds.toFixed(1)}S</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="5.0"
+                          step="0.5"
+                          value={bufferSeconds}
+                          onChange={(e) => setBufferSeconds(parseFloat(e.target.value))}
+                          className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
+                        />
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          Guarantees {bufferSeconds}s lead-in & {bufferSeconds}s tail buffer on each clip.
+                        </span>
+                      </div>
+
+                      {/* YOLO Model Confidence Threshold Slider */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-mono text-slate-200">
+                          <span>MODEL CONFIDENCE:</span>
+                          <span className="text-purple-300 font-bold">
+                            {(modelConfidence * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.10"
+                          max="0.75"
+                          step="0.05"
+                          value={modelConfidence}
+                          onChange={(e) => setModelConfidence(parseFloat(e.target.value))}
+                          className="w-full accent-purple-400 h-1.5 bg-black rounded-full cursor-pointer"
+                        />
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          Neural confidence filter (default 25%): strikes matching bolt channels or atmospheric flash surges are detected.
+                        </span>
+                      </div>
+
+                      {/* YOLO11 Neural ONNX Engine Toggle */}
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#140b2b]/90 border border-purple-500/30 shadow-inner">
+                        <div className="flex items-center gap-2.5">
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          <div>
+                            <span className="text-xs font-mono font-bold text-white block">
+                              YOLO11 NEURAL ENGINE
+                            </span>
+                            <span className="text-[10px] text-purple-300/70 font-mono">
+                              Client-side ONNX WebGL
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setUseYolo((prev) => !prev)}
+                          className={`px-3 py-1 rounded-full font-mono text-[10px] uppercase font-bold border transition ${
+                            useYolo
+                              ? 'bg-purple-600 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+                              : 'bg-black/60 border-purple-900/50 text-slate-400'
+                          }`}
+                        >
+                          {useYolo ? 'ACTIVE' : 'OFF'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons & Status Summary */}
+                    <div className="space-y-3 pt-6 border-t border-purple-900/30">
+                      <GlowButton
+                        variant="primary"
+                        onClick={() => runAnalysis()}
+                        disabled={isAnalyzing || isSlicing || isGeneratingMontage}
+                        fullWidth={true}
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            SCANNING ({analysisProgress?.progressPercent || 0}%)
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            RE-SCAN FOOTAGE
+                          </>
+                        )}
+                      </GlowButton>
+
+                      {/* Montage Generator Action */}
+                      {intervals.length > 0 && (
+                        <GlowButton
+                          variant="secondary"
+                          onClick={runGenerateMontage}
+                          disabled={isGeneratingMontage || isSlicing || isAnalyzing}
+                          fullWidth={true}
+                        >
+                          {isGeneratingMontage ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              STITCHING MONTAGE ({montageProgress?.overallPercent || 0}%)
+                            </>
+                          ) : (
+                            <>
+                              <Film className="w-4 h-4 mr-2 text-purple-300" />
+                              EXPORT MONTAGE (ALL STRIKES)
+                            </>
+                          )}
+                        </GlowButton>
+                      )}
+
+                      {/* Individual Clips Slicer Action */}
+                      {intervals.length > 0 && (
+                        <GlowButton
+                          variant="outline"
+                          onClick={runSliceAll}
+                          disabled={isSlicing || isGeneratingMontage || isAnalyzing}
+                          fullWidth={true}
+                        >
+                          {isSlicing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              SLICING CLIP {slicingProgress?.current}/{slicingProgress?.total}
+                            </>
+                          ) : (
+                            <>
+                              <Scissors className="w-4 h-4 mr-2" />
+                              EXTRACT {intervals.length} INDIVIDUAL CLIPS
+                            </>
+                          )}
+                        </GlowButton>
+                      )}
+
+                      {/* Identification Summary */}
+                      {intervals.length > 0 ? (
+                        <div className="bg-[#120b24]/80 border border-purple-500/40 rounded-xl p-3.5 text-xs font-mono space-y-2.5 shadow-[0_0_15px_rgba(168,85,247,0.2)] backdrop-blur-xl">
+                          <div className="flex items-center space-x-1.5 text-purple-200 font-bold">
+                            <CheckCircle2 className="w-4 h-4 text-purple-400" />
+                            <span>{intervals.length} STRIKE EVENT(S) IDENTIFIED</span>
+                          </div>
+                          <p className="text-slate-300 text-[11px] leading-relaxed font-sans">
+                            Isolated {detections.length} strike frame(s) into {intervals.length} merged window(s) of ±{bufferSeconds}s buffer.
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('explainability')}
+                            className="w-full py-2 px-3 rounded-lg bg-purple-950/70 border border-purple-500/40 text-purple-200 text-xs font-mono flex items-center justify-center gap-2 hover:bg-purple-900/60 transition shadow-sm"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-purple-400" />
+                            <span>VIEW EXPLAINABLE AI PROCESS</span>
+                          </button>
+                        </div>
+                      ) : (
+                        !isAnalyzing && detections.length === 0 && (
+                          <div className="bg-[#120b24]/60 border border-purple-900/30 rounded-xl p-3 text-[11px] font-mono text-purple-300/60 leading-relaxed flex items-center justify-between">
+                            <span>AWAITING SCAN COMMAND</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Process Page: Dedicated Explainable AI & Neural Analysis View */
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="font-editorial font-bold text-2xl sm:text-3xl text-white tracking-wide flex items-center gap-2.5">
+                      <Eye className="w-6 h-6 text-purple-400" />
+                      <span>PROCESS & EXPLAINABLE AI INSPECTOR</span>
+                    </h2>
+                    <p className="text-xs text-purple-300/70 font-mono uppercase tracking-wide">
+                      Frame-by-frame neural stroke verification, spatial coordinates, and explainability verdicts.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('studio')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold bg-[#140b2b] border border-purple-500/30 text-purple-200 hover:bg-[#1a1033] transition"
+                  >
+                    <Film className="w-4 h-4" />
+                    <span>RETURN TO STUDIO</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left 2 Cols: Synchronized Video Inspector with Real-time Bounding Box */}
+                  <div className="lg:col-span-2 bg-[#0c071a]/50 border border-purple-500/25 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-2xl shadow-2xl">
+                    <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-purple-900/50 group shadow-inner">
+                      <video
+                        ref={videoRef}
+                        src={videoUrl}
+                        preload="auto"
+                        muted={true}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onLoadedData={handleLoadedData}
+                        onTimeUpdate={handleTimeUpdate}
+                        onEnded={() => setIsPlaying(false)}
+                        className="w-full h-full object-contain cursor-pointer"
+                        onClick={togglePlay}
+                        playsInline
+                      />
+
+                      {activeStrike && activeStrike.bbox && (
+                        <div
+                          style={{
+                            left: `${activeStrike.bbox[0] * 100}%`,
+                            top: `${activeStrike.bbox[1] * 100}%`,
+                            width: `${Math.max(4, (activeStrike.bbox[2] - activeStrike.bbox[0]) * 100)}%`,
+                            height: `${Math.max(4, (activeStrike.bbox[3] - activeStrike.bbox[1]) * 100)}%`,
+                          }}
+                          className="absolute border-2 border-fuchsia-400 bg-fuchsia-500/15 pointer-events-none rounded-lg shadow-[0_0_20px_#e879f9] transition-all duration-75"
+                        >
+                          <div className="absolute -top-6 left-0 px-2 py-0.5 text-[10px] font-mono font-bold bg-[#140b2b]/95 text-fuchsia-200 border border-fuchsia-400/60 rounded shadow-lg whitespace-nowrap flex items-center gap-1">
+                            <Zap className="w-3 h-3 text-fuchsia-400 fill-fuchsia-400" />
+                            <span>LIGHTNING BOLT • {(activeStrike.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={togglePlay}
+                          className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white flex items-center justify-center transition shadow-lg shadow-purple-500/40 hover:scale-105 active:scale-95"
+                        >
+                          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        </button>
+
+                        <div className="text-xs font-mono text-slate-200 bg-[#120b24]/90 px-3.5 py-1.5 rounded-full border border-purple-500/30">
+                          <span className="text-purple-300 font-bold">{currentTime.toFixed(2)}s</span> / {duration.toFixed(2)}s
+                        </div>
+                      </div>
+                    </div>
+
+                    <TimelineViewer
+                      duration={duration}
+                      currentTime={currentTime}
+                      detections={detections}
+                      intervals={intervals}
+                      onSeek={handleSeek}
+                    />
+                  </div>
+
+                  {/* Right 1 Col: Explainable AI Inspector Component */}
+                  <div className="lg:col-span-1">
+                    <DetectionInspector
+                      activeStrike={activeStrike}
+                      allDetections={detections}
+                      currentTime={currentTime}
+                      onSeekToStrike={handleSeek}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

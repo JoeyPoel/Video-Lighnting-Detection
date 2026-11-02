@@ -3,6 +3,7 @@ import {
   getHighFidelityBitrate,
   getSupportedVideoMimeType,
   ensureVideoDimensions,
+  getMaxPlaybackRate,
 } from './videoSlicer.ts';
 
 describe('videoSlicer utilities', () => {
@@ -51,6 +52,13 @@ describe('videoSlicer utilities', () => {
       const { width, height } = await ensureVideoDimensions(mockVideo);
       expect(width).toBe(1920);
       expect(height).toBe(1080);
+    });
+  });
+
+  describe('getMaxPlaybackRate', () => {
+    it('returns a high hardware acceleration multiplier (>= 8.0x)', () => {
+      const rate = getMaxPlaybackRate();
+      expect(rate).toBeGreaterThanOrEqual(8.0);
     });
   });
 
