@@ -7,7 +7,12 @@ import { DetectionInspector } from './components/DetectionInspector.tsx';
 import { GlowButton } from './components/common/GlowButton.tsx';
 import { WireBadge } from './components/common/WireBadge.tsx';
 import { analyzeVideoForLightning, type AnalysisProgress } from './utils/lightningAnalyzer.ts';
-import { sliceVideoInterval, createLightningMontage, type MontageProgress } from './utils/videoSlicer.ts';
+import {
+  sliceVideoInterval,
+  createLightningMontage,
+  triggerFileDownload,
+  type MontageProgress,
+} from './utils/videoSlicer.ts';
 import type { StrikeDetection, StrikeInterval, ExtractedClip } from './types.ts';
 import {
   Zap,
@@ -179,6 +184,13 @@ export const App: React.FC = () => {
       }
 
       setExtractedClips(clips);
+
+      // Instantly trigger download for each extracted clip (smoothly staggered to avoid browser popup blockers)
+      clips.forEach((clip, idx) => {
+        setTimeout(() => {
+          triggerFileDownload(clip.blobUrl, clip.filename);
+        }, idx * 250);
+      });
     } catch (err) {
       console.error('Error extracting video clips:', err);
       alert('Failed to slice video clips.');
@@ -198,6 +210,9 @@ export const App: React.FC = () => {
         (prog) => setMontageProgress(prog)
       );
       setMontageClip(montage);
+
+      // Instantly trigger browser download of the unified montage file
+      triggerFileDownload(montage.blobUrl, montage.filename);
     } catch (err) {
       console.error('Error creating lightning montage:', err);
       alert('Failed to generate continuous montage video.');

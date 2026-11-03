@@ -133,16 +133,58 @@ export const checkWebCodecsAvcSupport = async (
 };
 
 /**
+ * Automatically triggers an instant browser file download for a generated Blob URL.
+ * Appends a hidden anchor element, triggers click(), and cleans up immediately.
+ *
+ * @param blobUrl - Blob object URL of the file to download.
+ * @param filename - Name and extension of the file to be saved.
+ */
+export const triggerFileDownload = (blobUrl: string, filename: string): void => {
+  if (typeof document === 'undefined') return;
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    if (document.body.contains(link)) {
+      document.body.removeChild(link);
+    }
+  }, 200);
+};
+
+/**
  * Helper to reliably seek video to a timestamp and await the seeked event.
+ * Includes proximity check and safety timeout to guarantee resolution.
+ *
+ * @param video - HTMLVideoElement to seek.
+ * @param time - Target timestamp in seconds.
  */
 export const seekTo = (video: HTMLVideoElement, time: number): Promise<void> =>
   new Promise((resolve) => {
+    const targetTime = Math.max(0, time);
+    // If the video is already at this position, resolve immediately
+    if (Math.abs(video.currentTime - targetTime) < 0.03) {
+      resolve();
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout>;
     const onSeeked = () => {
+      clearTimeout(timeoutId);
       video.removeEventListener('seeked', onSeeked);
       resolve();
     };
+
+    // Failsafe timeout in case seeked doesn't fire
+    timeoutId = setTimeout(() => {
+      video.removeEventListener('seeked', onSeeked);
+      resolve();
+    }, 1500);
+
     video.addEventListener('seeked', onSeeked);
-    video.currentTime = Math.max(0, time);
+    video.currentTime = targetTime;
   });
 
 /**
@@ -223,18 +265,31 @@ const sliceWithWebCodecs = async (
   };
 
   return new Promise<ExtractedClip>((resolve, reject) => {
-    let animId: number;
+    let animId: number | null = null;
+    let rvfcId: number | null = null;
+
+    const cancelPendingFrame = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+      const videoAny = video as unknown as { cancelVideoFrameCallback?: (id: number) => void };
+      if (rvfcId !== null && typeof videoAny.cancelVideoFrameCallback === 'function') {
+        videoAny.cancelVideoFrameCallback(rvfcId);
+        rvfcId = null;
+      }
+    };
 
     const processFrame = async () => {
       if (encoderError) {
-        cancelAnimationFrame(animId);
+        cancelPendingFrame();
         cleanup();
         reject(encoderError);
         return;
       }
 
-      if (video.currentTime >= endTime || video.paused || video.ended || isDone) {
-        cancelAnimationFrame(animId);
+      if (video.currentTime >= endTime || video.ended || isDone) {
+        cancelPendingFrame();
         cleanup();
         isDone = true;
 
@@ -276,7 +331,7 @@ const sliceWithWebCodecs = async (
           onProgress(percent);
         }
       } catch (err) {
-        cancelAnimationFrame(animId);
+        cancelPendingFrame();
         cleanup();
         reject(err);
         return;
@@ -284,7 +339,7 @@ const sliceWithWebCodecs = async (
 
       const videoAny = video as unknown as { requestVideoFrameCallback?: (cb: () => void) => number };
       if (typeof videoAny.requestVideoFrameCallback === 'function') {
-        videoAny.requestVideoFrameCallback(processFrame);
+        rvfcId = videoAny.requestVideoFrameCallback(processFrame);
       } else {
         animId = requestAnimationFrame(processFrame);
       }
@@ -293,7 +348,7 @@ const sliceWithWebCodecs = async (
     video.play().then(() => {
       const videoAny = video as unknown as { requestVideoFrameCallback?: (cb: () => void) => number };
       if (typeof videoAny.requestVideoFrameCallback === 'function') {
-        videoAny.requestVideoFrameCallback(processFrame);
+        rvfcId = videoAny.requestVideoFrameCallback(processFrame);
       } else {
         animId = requestAnimationFrame(processFrame);
       }
@@ -532,78 +587,73 @@ const createMontageWithWebCodecs = async (
   video.muted = true;
   video.playbackRate = acceleration;
 
-  let currentIntervalIdx = 0;
-  let accumulatedRecordedSeconds = 0;
-  let globalFrameIndex = 0;
-
   const cleanup = () => {
     video.pause();
     video.muted = originalMuted;
     video.playbackRate = originalPlaybackRate;
   };
 
-  return new Promise<ExtractedClip>((resolve, reject) => {
-    const recordNextInterval = async () => {
-      if (encoderError) {
-        cleanup();
-        reject(encoderError);
-        return;
-      }
+  let globalFrameIndex = 0;
+  let accumulatedRecordedSeconds = 0;
 
-      if (currentIntervalIdx >= sortedIntervals.length) {
-        cleanup();
-        try {
-          await encoder.flush();
-          muxer.finalize();
-          const buffer = muxer.target.buffer;
-          const blob = new Blob([buffer], { type: 'video/mp4' });
-          const blobUrl = URL.createObjectURL(blob);
-          const filename = `lightning_montage_${sortedIntervals.length}_strikes_${totalMontageDuration.toFixed(1)}s.mp4`;
-
-          resolve({
-            id: 'lightning-montage-all-strikes',
-            interval: {
-              id: 'montage-all',
-              start: 0,
-              end: totalMontageDuration,
-              duration: totalMontageDuration,
-              strikeTimestamps: sortedIntervals.flatMap((inv) => inv.strikeTimestamps),
-            },
-            blobUrl,
-            filename,
-            sizeBytes: blob.size,
-          });
-        } catch (err) {
-          reject(err);
-        }
-        return;
-      }
+  try {
+    for (let currentIntervalIdx = 0; currentIntervalIdx < sortedIntervals.length; currentIntervalIdx++) {
+      if (encoderError) throw encoderError;
 
       const inv = sortedIntervals[currentIntervalIdx];
       const invDuration = Math.max(0.1, inv.end - inv.start);
 
+      // Seek video to start of current strike interval
+      await seekTo(video, inv.start);
+      ctx.drawImage(video, 0, 0, width, height);
+
+      video.playbackRate = acceleration;
       try {
-        await seekTo(video, inv.start);
-        ctx.drawImage(video, 0, 0, width, height);
-        video.playbackRate = acceleration;
         await video.play();
+      } catch {
+        // Continue even if auto-play warns
+      }
 
-        let animId: number;
+      // Record frames until current interval reaches its end
+      await new Promise<void>((resolveInterval, rejectInterval) => {
+        let isIntervalDone = false;
+        let animId: number | null = null;
+        let rvfcId: number | null = null;
 
-        const onIntervalFrame = () => {
-          if (encoderError) {
+        const cancelFrame = () => {
+          if (animId !== null) {
             cancelAnimationFrame(animId);
-            cleanup();
-            reject(encoderError);
+            animId = null;
+          }
+          const videoAny = video as unknown as { cancelVideoFrameCallback?: (id: number) => void };
+          if (rvfcId !== null && typeof videoAny.cancelVideoFrameCallback === 'function') {
+            videoAny.cancelVideoFrameCallback(rvfcId);
+            rvfcId = null;
+          }
+        };
+
+        const finishInterval = () => {
+          if (isIntervalDone) return;
+          isIntervalDone = true;
+          cancelFrame();
+          video.pause();
+          accumulatedRecordedSeconds += invDuration;
+          resolveInterval();
+        };
+
+        const onFrame = () => {
+          if (isIntervalDone) return;
+
+          if (encoderError) {
+            isIntervalDone = true;
+            cancelFrame();
+            video.pause();
+            rejectInterval(encoderError);
             return;
           }
 
-          if (video.currentTime >= inv.end || video.paused || video.ended) {
-            cancelAnimationFrame(animId);
-            video.pause();
-            accumulatedRecordedSeconds += invDuration;
-            currentIntervalIdx++;
-            recordNextInterval();
+          if (video.currentTime >= inv.end || video.ended) {
+            finishInterval();
             return;
           }
 
@@ -618,9 +668,10 @@ const createMontageWithWebCodecs = async (
             videoFrame.close();
             globalFrameIndex++;
           } catch (err) {
-            cancelAnimationFrame(animId);
-            cleanup();
-            reject(err);
+            isIntervalDone = true;
+            cancelFrame();
+            video.pause();
+            rejectInterval(err);
             return;
           }
 
@@ -637,26 +688,47 @@ const createMontageWithWebCodecs = async (
 
           const videoAny = video as unknown as { requestVideoFrameCallback?: (cb: () => void) => number };
           if (typeof videoAny.requestVideoFrameCallback === 'function') {
-            videoAny.requestVideoFrameCallback(onIntervalFrame);
+            rvfcId = videoAny.requestVideoFrameCallback(onFrame);
           } else {
-            animId = requestAnimationFrame(onIntervalFrame);
+            animId = requestAnimationFrame(onFrame);
           }
         };
 
         const videoAny = video as unknown as { requestVideoFrameCallback?: (cb: () => void) => number };
         if (typeof videoAny.requestVideoFrameCallback === 'function') {
-          videoAny.requestVideoFrameCallback(onIntervalFrame);
+          rvfcId = videoAny.requestVideoFrameCallback(onFrame);
         } else {
-          animId = requestAnimationFrame(onIntervalFrame);
+          animId = requestAnimationFrame(onFrame);
         }
-      } catch (err) {
-        cleanup();
-        reject(err);
-      }
-    };
+      });
+    }
 
-    recordNextInterval();
-  });
+    cleanup();
+    await encoder.flush();
+    muxer.finalize();
+
+    const buffer = muxer.target.buffer;
+    const blob = new Blob([buffer], { type: 'video/mp4' });
+    const blobUrl = URL.createObjectURL(blob);
+    const filename = `lightning_montage_${sortedIntervals.length}_strikes_${totalMontageDuration.toFixed(1)}s.mp4`;
+
+    return {
+      id: 'lightning-montage-all-strikes',
+      interval: {
+        id: 'montage-all',
+        start: 0,
+        end: totalMontageDuration,
+        duration: totalMontageDuration,
+        strikeTimestamps: sortedIntervals.flatMap((inv) => inv.strikeTimestamps),
+      },
+      blobUrl,
+      filename,
+      sizeBytes: blob.size,
+    };
+  } catch (err) {
+    cleanup();
+    throw err;
+  }
 };
 
 /**
@@ -739,69 +811,81 @@ const createMontageWithMediaRecorder = async (
     video.muted = true;
     video.playbackRate = acceleration;
 
-    let currentIntervalIdx = 0;
-    let accumulatedRecordedSeconds = 0;
+    (async () => {
+      try {
+        let accumulatedRecordedSeconds = 0;
 
-    const recordNextInterval = async () => {
-      if (currentIntervalIdx >= sortedIntervals.length) {
+        for (let currentIntervalIdx = 0; currentIntervalIdx < sortedIntervals.length; currentIntervalIdx++) {
+          const inv = sortedIntervals[currentIntervalIdx];
+          const invDuration = Math.max(0.1, inv.end - inv.start);
+
+          await seekTo(video, inv.start);
+          ctx.drawImage(video, 0, 0, width, height);
+
+          if (recorder.state === 'inactive') {
+            recorder.start();
+          }
+
+          video.playbackRate = acceleration;
+          try {
+            await video.play();
+          } catch {
+            // Continue even if auto-play warns
+          }
+
+          await new Promise<void>((resolveInterval) => {
+            let isIntervalDone = false;
+            let animId: number | null = null;
+
+            const finishInterval = () => {
+              if (isIntervalDone) return;
+              isIntervalDone = true;
+              if (animId !== null) cancelAnimationFrame(animId);
+              video.pause();
+              accumulatedRecordedSeconds += invDuration;
+              resolveInterval();
+            };
+
+            const onFrame = () => {
+              if (isIntervalDone) return;
+
+              if (video.currentTime >= inv.end || video.ended) {
+                finishInterval();
+                return;
+              }
+
+              ctx.drawImage(video, 0, 0, width, height);
+
+              if (onProgress) {
+                const currentClipOffset = Math.max(0, video.currentTime - inv.start);
+                const totalElapsed = accumulatedRecordedSeconds + currentClipOffset;
+                const overallPercent = Math.min(100, Math.round((totalElapsed / totalMontageDuration) * 100));
+                onProgress({
+                  currentIntervalIndex: currentIntervalIdx + 1,
+                  totalIntervals: sortedIntervals.length,
+                  overallPercent,
+                });
+              }
+
+              animId = requestAnimationFrame(onFrame);
+            };
+
+            animId = requestAnimationFrame(onFrame);
+          });
+        }
+
         cleanup();
         if (recorder.state === 'recording') {
           recorder.stop();
         }
-        return;
-      }
-
-      const inv = sortedIntervals[currentIntervalIdx];
-      const invDuration = Math.max(0.1, inv.end - inv.start);
-
-      try {
-        await seekTo(video, inv.start);
-        ctx.drawImage(video, 0, 0, width, height);
-
-        if (recorder.state === 'inactive') {
-          recorder.start();
-        }
-
-        video.playbackRate = acceleration;
-        await video.play();
-
-        let animId: number;
-
-        const onIntervalFrame = () => {
-          if (video.currentTime >= inv.end || video.paused || video.ended) {
-            cancelAnimationFrame(animId);
-            video.pause();
-            accumulatedRecordedSeconds += invDuration;
-            currentIntervalIdx++;
-            recordNextInterval();
-            return;
-          }
-
-          ctx.drawImage(video, 0, 0, width, height);
-
-          if (onProgress) {
-            const currentClipOffset = Math.max(0, video.currentTime - inv.start);
-            const totalElapsed = accumulatedRecordedSeconds + currentClipOffset;
-            const overallPercent = Math.min(100, Math.round((totalElapsed / totalMontageDuration) * 100));
-            onProgress({
-              currentIntervalIndex: currentIntervalIdx + 1,
-              totalIntervals: sortedIntervals.length,
-              overallPercent,
-            });
-          }
-
-          animId = requestAnimationFrame(onIntervalFrame);
-        };
-
-        animId = requestAnimationFrame(onIntervalFrame);
       } catch (err) {
         cleanup();
-        recorder.stop();
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
         reject(err);
       }
-    };
-
-    recordNextInterval();
+    })();
   });
 };
 

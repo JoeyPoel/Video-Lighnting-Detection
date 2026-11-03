@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   getHighFidelityBitrate,
   getSupportedVideoMimeType,
   ensureVideoDimensions,
   getMaxPlaybackRate,
+  triggerFileDownload,
 } from './videoSlicer.ts';
 
 describe('videoSlicer utilities', () => {
@@ -73,6 +74,47 @@ describe('videoSlicer utilities', () => {
       } else {
         expect(result.mimeType).toContain('webm');
       }
+    });
+  });
+
+  describe('triggerFileDownload', () => {
+    it('safely handles non-DOM / server-side environments without throwing', () => {
+      expect(() => {
+        triggerFileDownload('blob:test', 'test.mp4');
+      }).not.toThrow();
+    });
+
+    it('creates an anchor, sets attributes and triggers click when document is available', () => {
+      const mockClick = vi.fn();
+      const mockAnchor = {
+        href: '',
+        download: '',
+        style: {} as Record<string, string>,
+        click: mockClick,
+      };
+      const appendSpy = vi.fn();
+      const removeSpy = vi.fn();
+
+      const fakeDocument = {
+        createElement: vi.fn(() => mockAnchor),
+        body: {
+          appendChild: appendSpy,
+          removeChild: removeSpy,
+          contains: vi.fn(() => true),
+        },
+      };
+
+      vi.stubGlobal('document', fakeDocument);
+
+      triggerFileDownload('blob:http://localhost/mock-video', 'lightning_test.mp4');
+
+      expect(fakeDocument.createElement).toHaveBeenCalledWith('a');
+      expect(mockAnchor.href).toBe('blob:http://localhost/mock-video');
+      expect(mockAnchor.download).toBe('lightning_test.mp4');
+      expect(mockClick).toHaveBeenCalledTimes(1);
+      expect(appendSpy).toHaveBeenCalledWith(mockAnchor);
+
+      vi.unstubAllGlobals();
     });
   });
 });
